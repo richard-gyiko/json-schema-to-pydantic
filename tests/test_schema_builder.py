@@ -311,6 +311,264 @@ def test_additional_properties_constraint():
         Model(path="/some/path", extra_field="should fail")
 
 
+def test_anyof_handling():
+    """Test handling of anyOf schema combinations.
+    
+    Verifies:
+    1. Fields can accept multiple types via anyOf
+    2. Validation works for each allowed type
+    3. Invalid types are rejected"""
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "flexible_field": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "number"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "value": {"type": "number"}
+                        },
+                        "required": ["name", "value"]
+                    }
+                ]
+            }
+        }
+    }
+
+    builder = JsonSchemaToPydantic()
+    Model = builder.convert_schema_to_model(schema, "AnyOfModel")
+
+    # Test string value
+    instance = Model(flexible_field="test string")
+    assert instance.flexible_field == "test string"
+
+    # Test number value
+    instance = Model(flexible_field=42.5)
+    assert instance.flexible_field == 42.5
+
+    # Test object value
+    instance = Model(flexible_field={"name": "test", "value": 123})
+    assert instance.flexible_field.name == "test"
+    assert instance.flexible_field.value == 123
+
+    # Should raise for invalid type
+    with pytest.raises(ValueError):
+        Model(flexible_field=True)  # Boolean is not one of the allowed types
+
+def test_oneof_handling():
+    """Test handling of oneOf schema combinations.
+    
+    Verifies:
+    1. Only one schema variant is accepted
+    2. Validation ensures exactly one schema matches
+    3. Invalid combinations are rejected"""
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "status": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "integer", "enum": [200, 201]},
+                            "message": {"type": "string"}
+                        },
+                        "required": ["code", "message"]
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "error": {"type": "string"},
+                            "details": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["error"]
+                    }
+                ],
+                "discriminator": {
+                    "propertyName": "type"
+                }
+            }
+        }
+    }
+
+    builder = JsonSchemaToPydantic()
+    Model = builder.convert_schema_to_model(schema, "OneOfModel")
+
+    # Test success response
+    instance = Model(status={
+        "type": "variant_0",
+        "code": 200,
+        "message": "Success"
+    })
+    assert instance.status.code.value == 200  # Access enum value
+    assert instance.status.message == "Success"
+    assert instance.status.type == "variant_0"
+
+    # Test error response
+    instance = Model(status={
+        "type": "variant_1",
+        "error": "Not Found",
+        "details": ["Resource missing"]
+    })
+    assert instance.status.error == "Not Found"
+    assert isinstance(instance.status.details, list)  # Verify it's a list
+    assert instance.status.details == ["Resource missing"]
+    assert instance.status.type == "variant_1"
+
+    # Should raise when type discriminator is missing
+    with pytest.raises(ValueError):
+        Model(status={"code": 200, "message": "Success"})
+
+    # Should raise when type discriminator is invalid
+    with pytest.raises(ValueError):
+        Model(status={
+            "type": "invalid",
+            "code": 200,
+            "message": "Success"
+        })
+
+def test_allof_handling():
+    """Test handling of allOf schema combinations.
+    
+    Verifies:
+    1. Combined schema constraints are enforced
+    2. Properties from all schemas are required
+    3. Validation checks all constraints"""
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "user": {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "name": {"type": "string"}
+                        },
+                        "required": ["id"]
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "email": {"type": "string", "format": "email"},
+                            "active": {"type": "boolean"}
+                        },
+                        "required": ["email"]
+                    }
+                ]
+            }
+        }
+    }
+
+    builder = JsonSchemaToPydantic()
+    Model = builder.convert_schema_to_model(schema, "AllOfModel")
+
+    # Test valid data meeting all constraints
+    instance = Model(user={
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "active": True
+    })
+    assert instance.user.id == 1
+    assert instance.user.name == "John Doe"
+    assert instance.user.email == "john@example.com"
+    assert instance.user.active is True
+
+    # Should raise when required field from any schema is missing
+    with pytest.raises(ValueError):
+        Model(user={"id": 1, "name": "John"})  # Missing email
+
+def test_nested_arrays_and_objects():
+    """Test handling of deeply nested arrays and objects.
+    
+    Verifies:
+    1. Complex nested structures are properly handled
+    2. Validation works at all levels
+    3. Type conversion is correct at each level"""
+    
+    schema = {
+        "type": "object",
+        "properties": {
+            "departments": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "teams": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "team_name": {"type": "string"},
+                                    "members": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {"type": "integer"},
+                                                "name": {"type": "string"},
+                                                "roles": {
+                                                    "type": "array",
+                                                    "items": {"type": "string"},
+                                                    "uniqueItems": True
+                                                }
+                                            },
+                                            "required": ["id", "name"]
+                                        }
+                                    }
+                                },
+                                "required": ["team_name"]
+                            }
+                        }
+                    },
+                    "required": ["name"]
+                }
+            }
+        }
+    }
+
+    builder = JsonSchemaToPydantic()
+    Model = builder.convert_schema_to_model(schema, "NestedStructure")
+
+    # Test complex nested structure
+    instance = Model(departments=[
+        {
+            "name": "Engineering",
+            "teams": [
+                {
+                    "team_name": "Backend",
+                    "members": [
+                        {
+                            "id": 1,
+                            "name": "Alice",
+                            "roles": ["developer", "architect"]
+                        },
+                        {
+                            "id": 2,
+                            "name": "Bob",
+                            "roles": ["developer", "lead"]
+                        }
+                    ]
+                }
+            ]
+        }
+    ])
+
+    # Verify nested structure
+    assert instance.departments[0].name == "Engineering"
+    assert instance.departments[0].teams[0].team_name == "Backend"
+    assert instance.departments[0].teams[0].members[0].name == "Alice"
+    assert isinstance(instance.departments[0].teams[0].members[0].roles, set)
+    assert "architect" in instance.departments[0].teams[0].members[0].roles
+
 def test_complex_model_generation():
     """Test generation of complex models with multiple features.
 

@@ -1,5 +1,5 @@
 from datetime import datetime, date, time
-from typing import Any, Dict, List, Optional, Union, Type, Tuple
+from typing import Any, Dict, List, Optional, Union, Type, Tuple, Annotated
 from uuid import UUID
 from pydantic import create_model, Field
 
@@ -72,6 +72,51 @@ class JsonSchemaToPydantic:
 
     def _get_field_type(self, field_schema: Dict[str, Any]) -> Type:
         """Determine Python/Pydantic type from schema field"""
+        # Handle oneOf with discriminated unions
+        if "oneOf" in field_schema:
+            variants = []
+            discriminator = field_schema.get("discriminator", {})
+            prop_name = discriminator.get("propertyName", "type")
+
+            for i, schema in enumerate(field_schema["oneOf"]):
+                variant_name = f"Variant_{i}_{id(schema)}"
+                variant_type = f"variant_{i}"
+
+                # Process original properties
+                properties = schema.get("properties", {}).copy()
+                required = list(schema.get("required", []))
+
+                # Add discriminator field to properties and required
+                if prop_name not in properties:
+                    properties[prop_name] = {"type": "string"}
+                if prop_name not in required:
+                    required.append(prop_name)
+
+                variant_fields = self._process_properties(properties, required)
+
+                # Add discriminator with Literal type
+                from typing_extensions import Literal
+
+                variant_fields[prop_name] = (
+                    Literal[variant_type],
+                    Field(
+                        default=variant_type,
+                        description=f"Discriminator field for variant {i}",
+                    ),
+                )
+
+                # Create variant model
+                variant_model = create_model(
+                    variant_name,
+                    **variant_fields,
+                )
+                variants.append(variant_model)
+
+            # Create discriminated union
+            return Annotated[
+                Union[tuple(variants)], Field(discriminator=prop_name)  # type: ignore
+            ]
+
         # Handle format first
         if "format" in field_schema:
             format_type = field_schema["format"]
