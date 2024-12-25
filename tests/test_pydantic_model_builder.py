@@ -112,6 +112,53 @@ def test_number_constraints():
         model.model_validate({"age": 25, "score": 95.7})  # not multiple of 0.5
 
 
+def test_any_of_constraint():
+    """Test anyOf field constraints validation."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "data": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "number"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "value": {"type": "integer"},
+                        },
+                        "required": ["name", "value"],
+                    },
+                ]
+            }
+        },
+    }
+
+    builder = PydanticModelBuilder()
+    model = builder.create_pydantic_model(schema)
+
+    # Test string value
+    instance = model.model_validate({"data": "test"})
+    assert instance.data == "test"
+
+    # Test number value
+    instance = model.model_validate({"data": 42})
+    assert instance.data == 42
+
+    # Test object value
+    instance = model.model_validate({"data": {"name": "test", "value": 123}})
+    assert instance.data.name == "test"
+    assert instance.data.value == 123
+
+    # Test invalid object
+    with pytest.raises(ValidationError):
+        model.model_validate({"data": {"name": "test"}})  # missing required value
+
+    # Test invalid type
+    with pytest.raises(ValidationError):
+        model.model_validate({"data": True})  # boolean not in anyOf
+
+
 def test_array_constraints():
     """Test array field constraints validation."""
     schema = {

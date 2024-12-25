@@ -1,6 +1,6 @@
 from typing import Any, Type, Dict, Union, Annotated, Literal
 from typing import List as typing_List
-from pydantic import BaseModel, create_model, Field
+from pydantic import BaseModel, create_model, Field, field_validator
 from pydantic.config import ConfigDict
 
 
@@ -20,9 +20,18 @@ class PydanticModelBuilder:
             if field_name in required:
                 field_info.update({"default": ...})
 
-            fields[field_name] = (field_type, Field(**field_info))
+            if isinstance(field_type, tuple):
+                actual_type, validators = field_type
+                fields[field_name] = (actual_type, Field(**field_info))
+            else:
+                fields[field_name] = (field_type, Field(**field_info))
 
-        Model = create_model("Model", **fields, model_config=model_config)
+        Model = create_model(
+            "Model",
+            **fields,
+            model_config=model_config,
+            __validators__=validators if "validators" in locals() else {},
+        )
         return Model
 
     def _get_field_type(self, field_schema: dict) -> Any:
@@ -54,10 +63,73 @@ class PydanticModelBuilder:
         if "oneOf" in field_schema:
             return self._handle_one_of(field_schema)
 
-        if field_type is None and "anyOf" in field_schema:
+        if "anyOf" in field_schema:
             return self._handle_any_of(field_schema["anyOf"])
 
         raise ValueError(f"Unsupported field type: {field_type}")
+
+    def _handle_any_of(self, schemas: list) -> Any:
+        """Handle anyOf schema combinator."""
+        if not schemas:
+            raise ValueError("anyOf must contain at least one schema")
+
+        types = []
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                continue
+
+            schema_type = schema.get("type")
+            if schema_type == "object":
+                model = self.create_pydantic_model(schema)
+                types.append(model)
+            elif schema_type == "string":
+                types.append(str)
+            elif schema_type == "number":
+                types.append(float)
+            elif schema_type == "integer":
+                types.append(int)
+            elif schema_type == "boolean":
+                types.append(bool)
+
+        if not types:
+            raise ValueError("No valid schemas found in anyOf")
+
+        # Create a validator function for this specific anyOf case
+        def validate_any_of(cls, v):
+            if isinstance(v, bool) and bool not in types:
+                raise ValueError("Boolean values are not allowed for this field")
+
+            for t in types:
+                try:
+                    # Try Pydantic model validation first for dict inputs
+                    if isinstance(v, dict) and hasattr(t, "model_validate"):
+                        return t.model_validate(v)
+                    
+                    # Special handling for numeric types
+                    if t is float and isinstance(v, (int, float)):
+                        return float(v)
+                    
+                    # Handle primitive types
+                    if isinstance(t, type) and isinstance(v, t):
+                        return v
+                    
+                    # Handle existing model instances
+                    if isinstance(v, BaseModel) and isinstance(v, t):
+                        return v
+                except Exception:
+                    continue
+
+            allowed_types = [getattr(t, "__name__", str(t)) for t in types]
+            raise ValueError(
+                f"Value must be one of the following types: {', '.join(allowed_types)}"
+            )
+
+        # Create the model with the validator
+        validators = {
+            "any_of_validator": field_validator("*", mode="before")(validate_any_of)
+        }
+
+        return Union[tuple(types)], validators
 
     def _handle_one_of(self, schema: dict) -> Any:
         """Handle oneOf schema combinator using discriminated unions."""
