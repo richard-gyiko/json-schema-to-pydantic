@@ -65,25 +65,40 @@ class PydanticModelBuilder:
 
     def _get_field_type(self, field_schema: dict, root_schema: dict) -> Any:
         """Get the Pydantic field type for a JSON schema field."""
+        if not isinstance(field_schema, dict):
+            raise ValueError(f"Invalid schema: expected dict, got {type(field_schema)}")
+
         if "$ref" in field_schema:
-            return self._resolve_ref(field_schema["$ref"], field_schema, root_schema)
+            try:
+                return self._resolve_ref(field_schema["$ref"], field_schema, root_schema)
+            except Exception as e:
+                raise ValueError(f"Failed to resolve reference: {str(e)}")
             
         if "enum" in field_schema:
+            if not field_schema["enum"]:
+                raise ValueError("Enum must have at least one value")
             return Literal[tuple(field_schema["enum"])]
 
         if "allOf" in field_schema:
-            return self._handle_all_of(field_schema["allOf"], root_schema)
+            try:
+                return self._handle_all_of(field_schema["allOf"], root_schema)
+            except Exception as e:
+                raise ValueError(f"Failed to process allOf: {str(e)}")
 
         field_type = field_schema.get("type")
 
         if field_type == "array":
-            items_schema = field_schema.get("items", {})
-            item_type = self._get_field_type(items_schema, root_schema)
-            if field_schema.get("uniqueItems", False):
-                from typing import Set
-
-                return Set[item_type]
-            return typing_List[item_type]
+            items_schema = field_schema.get("items")
+            if not items_schema:
+                raise ValueError("Array type must specify 'items' schema")
+            try:
+                item_type = self._get_field_type(items_schema, root_schema)
+                if field_schema.get("uniqueItems", False):
+                    from typing import Set
+                    return Set[item_type]
+                return typing_List[item_type]
+            except Exception as e:
+                raise ValueError(f"Failed to process array items: {str(e)}")
 
         if field_type == "string":
             return str
@@ -94,13 +109,25 @@ class PydanticModelBuilder:
         if field_type == "boolean":
             return bool
         if field_type == "object":
-            return self.create_pydantic_model(field_schema, root_schema)
+            try:
+                return self.create_pydantic_model(field_schema, root_schema)
+            except Exception as e:
+                raise ValueError(f"Failed to create nested model: {str(e)}")
         if "oneOf" in field_schema:
-            return self._handle_one_of(field_schema)
+            try:
+                return self._handle_one_of(field_schema)
+            except Exception as e:
+                raise ValueError(f"Failed to process oneOf: {str(e)}")
 
         if "anyOf" in field_schema:
-            return self._handle_any_of(field_schema["anyOf"])
+            try:
+                return self._handle_any_of(field_schema["anyOf"])
+            except Exception as e:
+                raise ValueError(f"Failed to process anyOf: {str(e)}")
 
+        if not field_type:
+            raise ValueError("Schema must specify a 'type' or a combiner ('allOf', 'anyOf', 'oneOf')")
+            
         raise ValueError(f"Unsupported field type: {field_type}")
 
     def _handle_any_of(self, schemas: list) -> Any:
