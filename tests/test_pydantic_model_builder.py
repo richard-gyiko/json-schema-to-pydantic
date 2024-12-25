@@ -318,6 +318,71 @@ def test_local_ref_handling():
             }
         })
 
+def test_format_validation():
+    """Test format validation for strings."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "email": {"type": "string", "format": "email"},
+            "website": {"type": "string", "format": "uri"},
+            "created_at": {"type": "string", "format": "date-time"},
+            "id": {"type": "string", "format": "uuid"}
+        }
+    }
+
+    builder = PydanticModelBuilder()
+    model = builder.create_pydantic_model(schema)
+
+    # Valid data
+    valid_data = {
+        "email": "test@example.com",
+        "website": "https://example.com",
+        "created_at": "2024-03-20T12:00:00Z",
+        "id": "123e4567-e89b-12d3-a456-426614174000"
+    }
+    instance = model.model_validate(valid_data)
+    assert instance.email == "test@example.com"
+    assert str(instance.website) == "https://example.com/"
+    from datetime import datetime, timezone
+    assert instance.created_at == datetime(2024, 3, 20, 12, 0, tzinfo=timezone.utc)
+    assert str(instance.id) == "123e4567-e89b-12d3-a456-426614174000"
+
+    # Invalid email
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "email": "not-an-email",
+            "website": "https://example.com",
+            "created_at": "2024-03-20T12:00:00Z",
+            "id": "123e4567-e89b-12d3-a456-426614174000"
+        })
+
+    # Invalid URI
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "email": "test@example.com",
+            "website": "not-a-url",
+            "created_at": "2024-03-20T12:00:00Z",
+            "id": "123e4567-e89b-12d3-a456-426614174000"
+        })
+
+    # Invalid date-time
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "email": "test@example.com",
+            "website": "https://example.com",
+            "created_at": "not-a-date",
+            "id": "123e4567-e89b-12d3-a456-426614174000"
+        })
+
+    # Invalid UUID
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "email": "test@example.com",
+            "website": "https://example.com",
+            "created_at": "2024-03-20T12:00:00Z",
+            "id": "not-a-uuid"
+        })
+
 def test_circular_ref_detection():
     """Test detection of circular references."""
     schema = {

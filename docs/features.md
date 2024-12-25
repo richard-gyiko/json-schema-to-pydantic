@@ -16,6 +16,11 @@ This document outlines the JSON Schema features currently supported by the Pydan
 - `minLength`: Minimum string length
 - `maxLength`: Maximum string length
 - `pattern`: Regular expression pattern validation
+- `format`: String format validation
+  - `email`: Email address format
+  - `date-time`: ISO 8601 date-time format
+  - `uri`: URI format
+  - `uuid`: UUID format
 
 ## Numeric Constraints
 

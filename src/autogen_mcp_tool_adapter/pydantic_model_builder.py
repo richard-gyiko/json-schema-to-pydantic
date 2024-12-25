@@ -52,6 +52,8 @@ class PydanticModelBuilder:
             if isinstance(field_type, tuple):
                 actual_type, validators = field_type
                 fields[field_name] = (actual_type, Field(**field_info))
+            elif isinstance(field_info, type):  # Handle format types directly
+                fields[field_name] = (field_info, Field())
             else:
                 fields[field_name] = (field_type, Field(**field_info))
 
@@ -322,6 +324,20 @@ class PydanticModelBuilder:
             constraints["max_length"] = field_schema["maxLength"]
         if "pattern" in field_schema:
             constraints["pattern"] = field_schema["pattern"]
+        if "format" in field_schema:
+            format_type = field_schema["format"]
+            if format_type == "email":
+                from pydantic import EmailStr
+                return EmailStr
+            elif format_type == "date-time":
+                from datetime import datetime
+                return datetime
+            elif format_type == "uri":
+                from pydantic import AnyUrl
+                return AnyUrl
+            elif format_type == "uuid":
+                from uuid import UUID
+                return UUID
 
         # Number constraints
         if "minimum" in field_schema:

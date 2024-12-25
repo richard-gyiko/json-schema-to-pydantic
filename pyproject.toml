@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "autogen-core==0.4.0.dev11",
     "mcp>=1.1.2",
+    "pydantic[email]>=2.10.4",
 ]
 
 [tool.uv]
