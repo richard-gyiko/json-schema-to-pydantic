@@ -194,6 +194,77 @@ def test_array_constraints():
     assert set(instance.tags) == {"python"}
 
 
+def test_all_of_constraint():
+    """Test allOf field constraints validation."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "data": {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "name": {"type": "string"}
+                        },
+                        "required": ["id"]
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "minLength": 3},
+                            "active": {"type": "boolean"}
+                        },
+                        "required": ["active"]
+                    }
+                ]
+            }
+        }
+    }
+
+    builder = PydanticModelBuilder()
+    model = builder.create_pydantic_model(schema)
+
+    # Test valid data meeting all constraints
+    instance = model.model_validate({
+        "data": {
+            "id": 1,
+            "name": "test",
+            "active": True
+        }
+    })
+    assert instance.data.id == 1
+    assert instance.data.name == "test"
+    assert instance.data.active is True
+
+    # Test invalid - missing required field from first schema
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "data": {
+                "name": "test",
+                "active": True
+            }
+        })
+
+    # Test invalid - missing required field from second schema
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "data": {
+                "id": 1,
+                "name": "test"
+            }
+        })
+
+    # Test invalid - name too short (constraint from second schema)
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "data": {
+                "id": 1,
+                "name": "ab",
+                "active": True
+            }
+        })
+
 def test_one_of_constraint():
     """Test oneOf field constraints validation."""
     schema = {

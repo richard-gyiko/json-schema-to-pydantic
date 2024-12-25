@@ -39,6 +39,9 @@ class PydanticModelBuilder:
         if "enum" in field_schema:
             return Literal[tuple(field_schema["enum"])]
 
+        if "allOf" in field_schema:
+            return self._handle_all_of(field_schema["allOf"])
+
         field_type = field_schema.get("type")
 
         if field_type == "array":
@@ -130,6 +133,78 @@ class PydanticModelBuilder:
         }
 
         return Union[tuple(types)], validators
+
+    def _merge_constraints(self, schema1: dict, schema2: dict) -> dict:
+        """Merge constraints from two schemas for the same property."""
+        merged = schema1.copy()
+
+        # Handle numeric constraints
+        for constraint in ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"]:
+            if constraint in schema2:
+                if constraint in merged:
+                    if "minimum" in constraint:
+                        merged[constraint] = max(merged[constraint], schema2[constraint])
+                    else:
+                        merged[constraint] = min(merged[constraint], schema2[constraint])
+                else:
+                    merged[constraint] = schema2[constraint]
+
+        # Handle string constraints
+        for constraint in ["minLength", "maxLength", "pattern"]:
+            if constraint in schema2:
+                if constraint in merged:
+                    if "min" in constraint:
+                        merged[constraint] = max(merged[constraint], schema2[constraint])
+                    elif "max" in constraint:
+                        merged[constraint] = min(merged[constraint], schema2[constraint])
+                    else:
+                        # For pattern, we could combine them with AND logic
+                        merged[constraint] = f"(?={merged[constraint]})(?={schema2[constraint]})"
+                else:
+                    merged[constraint] = schema2[constraint]
+
+        return merged
+
+    def _handle_all_of(self, schemas: list) -> Any:
+        """Handle allOf schema combinator."""
+        if not schemas:
+            raise ValueError("allOf must contain at least one schema")
+
+        # Merge all schemas into a single schema
+        merged_schema = {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                continue
+
+            if schema.get("type") != "object":
+                raise ValueError("allOf only supports object schemas currently")
+
+            # Merge properties
+            properties = schema.get("properties", {})
+            for prop_name, prop_schema in properties.items():
+                if prop_name in merged_schema["properties"]:
+                    # If property already exists, merge constraints
+                    existing_prop = merged_schema["properties"][prop_name]
+                    merged_schema["properties"][prop_name] = self._merge_constraints(
+                        existing_prop, prop_schema
+                    )
+                else:
+                    merged_schema["properties"][prop_name] = prop_schema
+
+            # Merge required fields
+            required = schema.get("required", [])
+            merged_schema["required"].extend(required)
+
+        # Remove duplicates from required fields while preserving order
+        merged_schema["required"] = list(dict.fromkeys(merged_schema["required"]))
+
+        # Create a model from the merged schema
+        return self.create_pydantic_model(merged_schema)
 
     def _handle_one_of(self, schema: dict) -> Any:
         """Handle oneOf schema combinator using discriminated unions."""
