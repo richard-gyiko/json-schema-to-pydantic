@@ -1,4 +1,4 @@
-from typing import Any, Type, Dict
+from typing import Any, Type, Dict, Union, Annotated, Literal
 from typing import List as typing_List
 from pydantic import BaseModel, create_model, Field
 from pydantic.config import ConfigDict
@@ -27,6 +27,9 @@ class PydanticModelBuilder:
 
     def _get_field_type(self, field_schema: dict) -> Any:
         """Get the Pydantic field type for a JSON schema field."""
+        if "enum" in field_schema:
+            return Literal[tuple(field_schema["enum"])]
+
         field_type = field_schema.get("type")
 
         if field_type == "array":
@@ -34,6 +37,7 @@ class PydanticModelBuilder:
             item_type = self._get_field_type(items_schema)
             if field_schema.get("uniqueItems", False):
                 from typing import Set
+
                 return Set[item_type]
             return typing_List[item_type]
 
@@ -47,10 +51,59 @@ class PydanticModelBuilder:
             return bool
         if field_type == "object":
             return self.create_pydantic_model(field_schema)
+        if "oneOf" in field_schema:
+            return self._handle_one_of(field_schema)
+
         if field_type is None and "anyOf" in field_schema:
             return self._handle_any_of(field_schema["anyOf"])
 
         raise ValueError(f"Unsupported field type: {field_type}")
+
+    def _handle_one_of(self, schema: dict) -> Any:
+        """Handle oneOf schema combinator using discriminated unions."""
+        one_of = schema.get("oneOf", [])
+        if not one_of:
+            raise ValueError("oneOf must contain at least one schema")
+
+        # We need to find a common discriminator field across all schemas
+        discriminator_field = "type"
+
+        # Create models for each oneOf schema
+        models = []
+        for i, subschema in enumerate(one_of):
+            # Each subschema needs a discriminator field
+            if isinstance(subschema, dict):
+                # Add the discriminator field if not present
+                if "properties" not in subschema:
+                    subschema["properties"] = {}
+
+                # Get the discriminator value from the const field
+                discriminator_value = (
+                    subschema.get("properties", {})
+                    .get(discriminator_field, {})
+                    .get("const")
+                )
+                if not discriminator_value:
+                    raise ValueError(
+                        f"Schema in oneOf must have a '{discriminator_field}' field with a 'const' value"
+                    )
+
+                # Create a Literal type for the discriminator field
+                subschema["properties"][discriminator_field] = {
+                    "type": "string",
+                    "enum": [discriminator_value],
+                }
+
+                model = self.create_pydantic_model(subschema)
+                models.append(model)
+
+        union_types = []
+        for model in models:
+            union_types.append(model)
+
+        return Annotated[
+            Union[tuple(union_types)], Field(discriminator=discriminator_field)
+        ]
 
     def _get_field_constraints(self, field_schema: dict) -> Dict[str, Any]:
         """Extract field constraints from schema."""

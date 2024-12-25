@@ -1,5 +1,5 @@
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from autogen_mcp_tool_adapter.pydantic_model_builder import PydanticModelBuilder
 
 
@@ -145,3 +145,53 @@ def test_array_constraints():
     # Duplicate items should be automatically handled by Set type
     instance = model.model_validate({"tags": ["python", "python"]})
     assert set(instance.tags) == {"python"}
+
+
+def test_one_of_constraint():
+    """Test oneOf field constraints validation."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "pet": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "const": "dog"},
+                            "bark": {"type": "boolean"},
+                        },
+                        "required": ["type", "bark"],
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "const": "cat"},
+                            "meow": {"type": "boolean"},
+                        },
+                        "required": ["type", "meow"],
+                    },
+                ]
+            }
+        },
+    }
+
+    builder = PydanticModelBuilder()
+    model = builder.create_pydantic_model(schema)
+
+    # Valid dog
+    instance = model.model_validate({"pet": {"type": "dog", "bark": True}})
+    assert instance.pet.type == "dog"
+    assert instance.pet.bark is True
+
+    # Valid cat
+    instance = model.model_validate({"pet": {"type": "cat", "meow": True}})
+    assert instance.pet.type == "cat"
+    assert instance.pet.meow is True
+
+    # Invalid - missing discriminator
+    with pytest.raises(ValidationError):
+        model.model_validate({"pet": {"bark": True}})
+
+    # Invalid - wrong type
+    with pytest.raises(ValidationError):
+        model.model_validate({"pet": {"type": "fish", "swim": True}})
