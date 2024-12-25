@@ -5,8 +5,37 @@ from pydantic.config import ConfigDict
 
 
 class PydanticModelBuilder:
-    def create_pydantic_model(self, schema: dict) -> Type[BaseModel]:
+    def __init__(self):
+        self._processing_refs: set[str] = set()  # For circular reference detection
+
+    def _resolve_ref(self, ref: str, schema: dict, root_schema: dict) -> Any:
+        """Resolve a JSON Schema $ref."""
+        if ref in self._processing_refs:
+            raise ValueError(f"Circular reference detected: {ref}")
+        
+        try:
+            self._processing_refs.add(ref)
+            
+            if not ref.startswith('#'):
+                raise ValueError("Only local references (#/...) are supported")
+                
+            # Split the reference path and navigate through the schema
+            path = ref.split('/')[1:]  # Remove the '#' and split
+            current = root_schema
+            for part in path:
+                # Handle JSON Pointer escaping
+                part = part.replace('~1', '/').replace('~0', '~')
+                current = current[part]
+            return self._get_field_type(current, root_schema)
+                
+        finally:
+            self._processing_refs.remove(ref)
+
+    def create_pydantic_model(self, schema: dict, root_schema: dict = None) -> Type[BaseModel]:
         """Create a Pydantic model from a JSON schema."""
+        if root_schema is None:
+            root_schema = schema
+            
         model_config = ConfigDict(extra="forbid")
 
         properties = schema.get("properties", {})
@@ -14,7 +43,7 @@ class PydanticModelBuilder:
 
         fields = {}
         for field_name, field_schema in properties.items():
-            field_type = self._get_field_type(field_schema)
+            field_type = self._get_field_type(field_schema, root_schema)
             field_info = self._get_field_constraints(field_schema)
 
             if field_name in required:
@@ -34,19 +63,22 @@ class PydanticModelBuilder:
         )
         return Model
 
-    def _get_field_type(self, field_schema: dict) -> Any:
+    def _get_field_type(self, field_schema: dict, root_schema: dict) -> Any:
         """Get the Pydantic field type for a JSON schema field."""
+        if "$ref" in field_schema:
+            return self._resolve_ref(field_schema["$ref"], field_schema, root_schema)
+            
         if "enum" in field_schema:
             return Literal[tuple(field_schema["enum"])]
 
         if "allOf" in field_schema:
-            return self._handle_all_of(field_schema["allOf"])
+            return self._handle_all_of(field_schema["allOf"], root_schema)
 
         field_type = field_schema.get("type")
 
         if field_type == "array":
             items_schema = field_schema.get("items", {})
-            item_type = self._get_field_type(items_schema)
+            item_type = self._get_field_type(items_schema, root_schema)
             if field_schema.get("uniqueItems", False):
                 from typing import Set
 
@@ -62,7 +94,7 @@ class PydanticModelBuilder:
         if field_type == "boolean":
             return bool
         if field_type == "object":
-            return self.create_pydantic_model(field_schema)
+            return self.create_pydantic_model(field_schema, root_schema)
         if "oneOf" in field_schema:
             return self._handle_one_of(field_schema)
 
@@ -165,7 +197,7 @@ class PydanticModelBuilder:
 
         return merged
 
-    def _handle_all_of(self, schemas: list) -> Any:
+    def _handle_all_of(self, schemas: list, root_schema: dict) -> Any:
         """Handle allOf schema combinator."""
         if not schemas:
             raise ValueError("allOf must contain at least one schema")
@@ -204,7 +236,7 @@ class PydanticModelBuilder:
         merged_schema["required"] = list(dict.fromkeys(merged_schema["required"]))
 
         # Create a model from the merged schema
-        return self.create_pydantic_model(merged_schema)
+        return self.create_pydantic_model(merged_schema, root_schema)
 
     def _handle_one_of(self, schema: dict) -> Any:
         """Handle oneOf schema combinator using discriminated unions."""

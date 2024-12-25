@@ -265,6 +265,83 @@ def test_all_of_constraint():
             }
         })
 
+def test_local_ref_handling():
+    """Test handling of local JSON Schema references."""
+    schema = {
+        "type": "object",
+        "definitions": {
+            "address": {
+                "type": "object",
+                "properties": {
+                    "street": {"type": "string"},
+                    "city": {"type": "string"},
+                    "country": {"type": "string"}
+                },
+                "required": ["street", "city", "country"]
+            }
+        },
+        "properties": {
+            "name": {"type": "string"},
+            "home_address": {"$ref": "#/definitions/address"},
+            "work_address": {"$ref": "#/definitions/address"}
+        }
+    }
+
+    builder = PydanticModelBuilder()
+    model = builder.create_pydantic_model(schema)
+
+    # Test valid data
+    data = {
+        "name": "John Doe",
+        "home_address": {
+            "street": "123 Home St",
+            "city": "Hometown",
+            "country": "Homeland"
+        },
+        "work_address": {
+            "street": "456 Work Ave",
+            "city": "Worktown",
+            "country": "Workland"
+        }
+    }
+    instance = model.model_validate(data)
+    assert instance.name == "John Doe"
+    assert instance.home_address.street == "123 Home St"
+    assert instance.work_address.city == "Worktown"
+
+    # Test invalid data - missing required field
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "name": "John Doe",
+            "home_address": {
+                "street": "123 Home St"  # missing city
+            }
+        })
+
+def test_circular_ref_detection():
+    """Test detection of circular references."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "person": {
+                "$ref": "#/definitions/person"
+            }
+        },
+        "definitions": {
+            "person": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "friend": {"$ref": "#/definitions/person"}
+                }
+            }
+        }
+    }
+
+    builder = PydanticModelBuilder()
+    with pytest.raises(ValueError, match="Circular reference detected"):
+        builder.create_pydantic_model(schema)
+
 def test_one_of_constraint():
     """Test oneOf field constraints validation."""
     schema = {
