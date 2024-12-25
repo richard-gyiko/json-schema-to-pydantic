@@ -1,7 +1,7 @@
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional, Union, Type, Tuple, Annotated
 from uuid import UUID
-from pydantic import create_model, Field
+from pydantic import create_model, Field, field_validator, BaseModel, Discriminator
 
 
 class JsonSchemaToPydantic:
@@ -72,6 +72,28 @@ class JsonSchemaToPydantic:
 
     def _get_field_type(self, field_schema: Dict[str, Any]) -> Type:
         """Determine Python/Pydantic type from schema field"""
+        # Handle anyOf by creating a Union of possible types
+        if "anyOf" in field_schema:
+            variant_types = []
+            for schema in field_schema["anyOf"]:
+                # For object schemas in anyOf, create proper nested models
+                if schema.get("type") == "object":
+                    nested_name = f"AnyOfVariant_{id(schema)}"
+                    nested_fields = self._process_properties(
+                        schema.get("properties", {}),
+                        schema.get("required", [])
+                    )
+                    variant_type = self._create_pydantic_model(
+                        nested_name,
+                        nested_fields,
+                        schema.get("required", [])
+                    )
+                else:
+                    variant_type = self._get_field_type(schema)
+                variant_types.append(variant_type)
+            
+            return Union[tuple(variant_types)]  # type: ignore
+            
         # Handle oneOf with discriminated unions
         if "oneOf" in field_schema:
             variants = []

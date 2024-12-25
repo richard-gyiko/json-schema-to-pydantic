@@ -1,0 +1,2 @@
+- Use Pydantic v2.
+- Use types everywhere possible.
