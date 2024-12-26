@@ -12,30 +12,32 @@ class PydanticModelBuilder:
         """Resolve a JSON Schema $ref."""
         if ref in self._processing_refs:
             raise ValueError(f"Circular reference detected: {ref}")
-        
+
         try:
             self._processing_refs.add(ref)
-            
-            if not ref.startswith('#'):
+
+            if not ref.startswith("#"):
                 raise ValueError("Only local references (#/...) are supported")
-                
+
             # Split the reference path and navigate through the schema
-            path = ref.split('/')[1:]  # Remove the '#' and split
+            path = ref.split("/")[1:]  # Remove the '#' and split
             current = root_schema
             for part in path:
                 # Handle JSON Pointer escaping
-                part = part.replace('~1', '/').replace('~0', '~')
+                part = part.replace("~1", "/").replace("~0", "~")
                 current = current[part]
             return self._get_field_type(current, root_schema)
-                
+
         finally:
             self._processing_refs.remove(ref)
 
-    def create_pydantic_model(self, schema: dict, root_schema: dict = None) -> Type[BaseModel]:
+    def create_pydantic_model(
+        self, schema: dict, root_schema: dict = None
+    ) -> Type[BaseModel]:
         """Create a Pydantic model from a JSON schema."""
         if root_schema is None:
             root_schema = schema
-            
+
         model_config = ConfigDict(extra="forbid")
 
         properties = schema.get("properties", {})
@@ -72,10 +74,12 @@ class PydanticModelBuilder:
 
         if "$ref" in field_schema:
             try:
-                return self._resolve_ref(field_schema["$ref"], field_schema, root_schema)
+                return self._resolve_ref(
+                    field_schema["$ref"], field_schema, root_schema
+                )
             except Exception as e:
                 raise ValueError(f"Failed to resolve reference: {str(e)}")
-            
+
         if "enum" in field_schema:
             if not field_schema["enum"]:
                 raise ValueError("Enum must have at least one value")
@@ -97,7 +101,19 @@ class PydanticModelBuilder:
                 item_type = self._get_field_type(items_schema, root_schema)
                 if field_schema.get("uniqueItems", False):
                     from typing import Set
-                    return Set[item_type]
+
+                    def validate_unique_items(v):
+                        if isinstance(v, list):  # Only validate lists
+                            if len(v) != len(set(v)):
+                                raise ValueError("Array items must be unique")
+                        return v
+
+                    validators = {
+                        "unique_items_validator": field_validator("*", mode="before")(
+                            validate_unique_items
+                        )
+                    }
+                    return Set[item_type], validators
                 return typing_List[item_type]
             except Exception as e:
                 raise ValueError(f"Failed to process array items: {str(e)}")
@@ -128,8 +144,10 @@ class PydanticModelBuilder:
                 raise ValueError(f"Failed to process anyOf: {str(e)}")
 
         if not field_type:
-            raise ValueError("Schema must specify a 'type' or a combiner ('allOf', 'anyOf', 'oneOf')")
-            
+            raise ValueError(
+                "Schema must specify a 'type' or a combiner ('allOf', 'anyOf', 'oneOf')"
+            )
+
         raise ValueError(f"Unsupported field type: {field_type}")
 
     def _handle_any_of(self, schemas: list) -> Any:
@@ -168,15 +186,15 @@ class PydanticModelBuilder:
                     # Try Pydantic model validation first for dict inputs
                     if isinstance(v, dict) and hasattr(t, "model_validate"):
                         return t.model_validate(v)
-                    
+
                     # Special handling for numeric types
                     if t is float and isinstance(v, (int, float)):
                         return float(v)
-                    
+
                     # Handle primitive types
                     if isinstance(t, type) and isinstance(v, t):
                         return v
-                    
+
                     # Handle existing model instances
                     if isinstance(v, BaseModel) and isinstance(v, t):
                         return v
@@ -200,13 +218,23 @@ class PydanticModelBuilder:
         merged = schema1.copy()
 
         # Handle numeric constraints
-        for constraint in ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"]:
+        for constraint in [
+            "minimum",
+            "maximum",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "multipleOf",
+        ]:
             if constraint in schema2:
                 if constraint in merged:
                     if "minimum" in constraint:
-                        merged[constraint] = max(merged[constraint], schema2[constraint])
+                        merged[constraint] = max(
+                            merged[constraint], schema2[constraint]
+                        )
                     else:
-                        merged[constraint] = min(merged[constraint], schema2[constraint])
+                        merged[constraint] = min(
+                            merged[constraint], schema2[constraint]
+                        )
                 else:
                     merged[constraint] = schema2[constraint]
 
@@ -215,12 +243,18 @@ class PydanticModelBuilder:
             if constraint in schema2:
                 if constraint in merged:
                     if "min" in constraint:
-                        merged[constraint] = max(merged[constraint], schema2[constraint])
+                        merged[constraint] = max(
+                            merged[constraint], schema2[constraint]
+                        )
                     elif "max" in constraint:
-                        merged[constraint] = min(merged[constraint], schema2[constraint])
+                        merged[constraint] = min(
+                            merged[constraint], schema2[constraint]
+                        )
                     else:
                         # For pattern, we could combine them with AND logic
-                        merged[constraint] = f"(?={merged[constraint]})(?={schema2[constraint]})"
+                        merged[constraint] = (
+                            f"(?={merged[constraint]})(?={schema2[constraint]})"
+                        )
                 else:
                     merged[constraint] = schema2[constraint]
 
@@ -232,11 +266,7 @@ class PydanticModelBuilder:
             raise ValueError("allOf must contain at least one schema")
 
         # Merge all schemas into a single schema
-        merged_schema = {
-            "type": "object",
-            "properties": {},
-            "required": []
-        }
+        merged_schema = {"type": "object", "properties": {}, "required": []}
 
         for schema in schemas:
             if not isinstance(schema, dict):
@@ -328,15 +358,19 @@ class PydanticModelBuilder:
             format_type = field_schema["format"]
             if format_type == "email":
                 from pydantic import EmailStr
+
                 return EmailStr
             elif format_type == "date-time":
                 from datetime import datetime
+
                 return datetime
             elif format_type == "uri":
                 from pydantic import AnyUrl
+
                 return AnyUrl
             elif format_type == "uuid":
                 from uuid import UUID
+
                 return UUID
 
         # Number constraints
