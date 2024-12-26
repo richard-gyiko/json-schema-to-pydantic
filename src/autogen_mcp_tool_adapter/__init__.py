@@ -9,17 +9,23 @@ from .exceptions import (
 __version__ = "0.1.0"
 
 
-def create_model(schema: dict, root_schema: dict = None):
+from typing import Type, Optional, Dict, Any
+from pydantic import BaseModel
+
+
+def create_model(
+    schema: Dict[str, Any], root_schema: Optional[Dict[str, Any]] = None
+) -> Type[BaseModel]:
     """
     Create a Pydantic model from a JSON Schema.
 
     Args:
-        schema (dict): The JSON Schema to convert
-        root_schema (dict, optional): The root schema containing definitions.
-                                    Defaults to schema if not provided.
+        schema: The JSON Schema to convert
+        root_schema: The root schema containing definitions.
+                    Defaults to schema if not provided.
 
     Returns:
-        Type[BaseModel]: A Pydantic model class
+        A Pydantic model class
 
     Raises:
         SchemaError: If the schema is invalid

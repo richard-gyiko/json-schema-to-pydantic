@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any, Type, Dict, Optional
 from pydantic import BaseModel, create_model, Field
 
 from .builders import ConstraintBuilder
@@ -17,9 +17,18 @@ class PydanticModelBuilder(IModelBuilder):
         self.combiner_handler = CombinerHandler()
 
     def create_pydantic_model(
-        self, schema: dict, root_schema: dict = None
+        self, schema: Dict[str, Any], root_schema: Optional[Dict[str, Any]] = None
     ) -> Type[BaseModel]:
-        """Creates a Pydantic model from a JSON Schema definition."""
+        """
+        Creates a Pydantic model from a JSON Schema definition.
+
+        Args:
+            schema: The JSON Schema to convert
+            root_schema: The root schema containing definitions
+
+        Returns:
+            A Pydantic model class
+        """
         if root_schema is None:
             root_schema = schema
 
@@ -57,7 +66,9 @@ class PydanticModelBuilder(IModelBuilder):
 
         return model
 
-    def _get_field_type(self, field_schema: dict, root_schema: dict) -> Any:
+    def _get_field_type(
+        self, field_schema: Dict[str, Any], root_schema: Dict[str, Any]
+    ) -> Any:
         """Resolves the Python type for a field schema."""
         if "$ref" in field_schema:
             field_schema = self.reference_resolver.resolve_ref(
@@ -82,7 +93,7 @@ class PydanticModelBuilder(IModelBuilder):
 
         return self.type_resolver.resolve_type(field_schema, root_schema)
 
-    def _build_field_info(self, field_schema: dict, required: bool) -> Field:
+    def _build_field_info(self, field_schema: Dict[str, Any], required: bool) -> Field:
         """Creates a Pydantic Field with constraints from schema."""
         field_kwargs = {}
 
