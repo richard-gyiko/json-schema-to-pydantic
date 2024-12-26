@@ -4,12 +4,6 @@ class SchemaError(Exception):
     pass
 
 
-class ValidationError(SchemaError):
-    """Invalid schema structure"""
-
-    pass
-
-
 class TypeError(SchemaError):
     """Invalid or unsupported type"""
 

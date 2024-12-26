@@ -3,13 +3,6 @@ from typing import Any, Type
 from pydantic import BaseModel
 
 
-class ISchemaValidator(ABC):
-    @abstractmethod
-    def validate_schema(self, schema: dict) -> None:
-        """Validates JSON Schema structure and constraints"""
-        pass
-
-
 class ITypeResolver(ABC):
     @abstractmethod
     def resolve_type(self, schema: dict, root_schema: dict) -> Any:
