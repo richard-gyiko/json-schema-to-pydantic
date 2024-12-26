@@ -3,21 +3,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "autogen-mcp-tool-adapter"
+name = "json-schema-pydantic"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python library for automatically generating Pydantic v2 models from JSON Schema definitions"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "autogen-core==0.4.0.dev11",
-    "mcp>=1.1.2",
     "pydantic[email]>=2.10.4",
 ]
 
 [tool.uv]
 prerelease = "allow"
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "pytest>=8.3.4",
 ]
@@ -26,3 +24,6 @@ dev = [
 pythonpath = [
      "src"
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jsonschema_pydantic"]

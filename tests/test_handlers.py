@@ -1,6 +1,6 @@
 import pytest
-from autogen_mcp_tool_adapter.handlers import CombinerHandler
-from autogen_mcp_tool_adapter.exceptions import CombinerError
+from jsonschema_pydantic.handlers import CombinerHandler
+from jsonschema_pydantic.exceptions import CombinerError
 from pydantic import BaseModel
 
 

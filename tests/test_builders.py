@@ -1,4 +1,4 @@
-from autogen_mcp_tool_adapter.builders import ConstraintBuilder
+from jsonschema_pydantic.builders import ConstraintBuilder
 from pydantic import EmailStr, AnyUrl
 from typing import Literal
 from datetime import datetime

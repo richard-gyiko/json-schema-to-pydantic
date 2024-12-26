@@ -1,54 +1,58 @@
 # JSON Schema Features Support
 
-This document outlines the JSON Schema features currently supported by the Pydantic Model Builder.
+This document outlines the JSON Schema features supported by the library.
 
 ## Basic Types
 
-- `string`
-- `integer`
-- `number`
-- `boolean`
-- `array`
-- `object`
+- `string`: Maps to Python `str`
+- `integer`: Maps to Python `int`
+- `number`: Maps to Python `float`
+- `boolean`: Maps to Python `bool`
+- `array`: Maps to Python `List`
+- `object`: Maps to Pydantic model
 
-## String Constraints
+## String Formats
 
+Supported formats with their Python types:
+- `email`: `pydantic.EmailStr`
+- `date-time`: `datetime.datetime`
+- `uri`: `pydantic.AnyUrl`
+- `uuid`: `uuid.UUID`
+
+Example:
+```json
+{
+    "type": "object",
+    "properties": {
+        "email": {"type": "string", "format": "email"},
+        "website": {"type": "string", "format": "uri"},
+        "created_at": {"type": "string", "format": "date-time"}
+    }
+}
+```
+
+## Constraints
+
+### String Constraints
 - `minLength`: Minimum string length
 - `maxLength`: Maximum string length
-- `pattern`: Regular expression pattern validation
-- `format`: String format validation
-  - `email`: Email address format
-  - `date-time`: ISO 8601 date-time format
-  - `uri`: URI format
-  - `uuid`: UUID format
+- `pattern`: Regular expression pattern
+- `const`: Fixed value
 
-## Numeric Constraints
+### Numeric Constraints
+- `minimum`/`maximum`: Inclusive bounds
+- `exclusiveMinimum`/`exclusiveMaximum`: Exclusive bounds
+- `multipleOf`: Value must be multiple of this number
 
-- `minimum`: Minimum value (inclusive)
-- `maximum`: Maximum value (inclusive)
-- `exclusiveMinimum`: Minimum value (exclusive)
-- `exclusiveMaximum`: Maximum value (exclusive)
-- `multipleOf`: Value must be a multiple of this number
-
-## Array Constraints
-
+### Array Constraints
 - `items`: Schema for array items
-- `minItems`: Minimum array length
-- `maxItems`: Maximum array length
-- `uniqueItems`: Enforces unique items when true
-
-## Object Properties
-
-- `properties`: Object property definitions
-- `required`: List of required properties
-- `additionalProperties`: Not supported (defaults to False)
+- `minItems`/`maxItems`: Array length bounds
+- `uniqueItems`: Enforces unique items
 
 ## Schema Combiners
 
 ### allOf
-Combines multiple schemas with AND logic. All constraints from each schema must be satisfied.
-
-Example:
+Combines multiple schemas with AND logic:
 ```json
 {
     "allOf": [
@@ -58,38 +62,23 @@ Example:
 }
 ```
 
-### anyOf
-Allows a value to validate against any of the given schemas.
-
-Example:
-```json
-{
-    "anyOf": [
-        {"type": "string"},
-        {"type": "number"}
-    ]
-}
-```
-
 ### oneOf
-Implements discriminated unions using a type field.
-
-Example:
+Creates discriminated unions using a type field:
 ```json
 {
     "oneOf": [
         {
             "type": "object",
             "properties": {
-                "type": {"const": "dog"},
-                "bark": {"type": "boolean"}
+                "type": {"const": "user"},
+                "email": {"type": "string", "format": "email"}
             }
         },
         {
             "type": "object",
             "properties": {
-                "type": {"const": "cat"},
-                "meow": {"type": "boolean"}
+                "type": {"const": "admin"},
+                "permissions": {"type": "array", "items": {"type": "string"}}
             }
         }
     ]
@@ -98,29 +87,30 @@ Example:
 
 ## References
 
-- Local references (`#/definitions/...`) are supported
-- Circular reference detection
-- External references are not currently supported
+Local references are supported with circular reference detection:
+```json
+{
+    "type": "object",
+    "properties": {
+        "parent": {"$ref": "#/definitions/Node"}
+    },
+    "definitions": {
+        "Node": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/Node"}
+                }
+            }
+        }
+    }
+}
+```
 
-## Validation Features
+## Limitations
 
-- Type validation
-- Required fields
-- Numeric ranges
-- String patterns and length
-- Array length and uniqueness
-- Enum values
-- Const values
-
-## Not Currently Supported
-
-- `$id`
-- `$schema`
-- `definitions` at root level (though references work)
-- External references
-- `propertyNames`
-- `dependencies`
-- `if`/`then`/`else`
-- `not`
-- `additionalProperties`
-- `patternProperties`
+- External references are not supported
+- `additionalProperties` defaults to False
+- `patternProperties` not supported
+- `if`/`then`/`else` not supported

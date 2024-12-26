@@ -1,6 +1,6 @@
 import pytest
 from pydantic import BaseModel
-from autogen_mcp_tool_adapter.model_builder import PydanticModelBuilder
+from jsonschema_pydantic.model_builder import PydanticModelBuilder
 
 
 def test_basic_model_creation():

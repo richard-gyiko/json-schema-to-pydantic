@@ -1,6 +1,6 @@
 import pytest
-from autogen_mcp_tool_adapter.resolvers import TypeResolver, ReferenceResolver
-from autogen_mcp_tool_adapter.exceptions import ReferenceError
+from jsonschema_pydantic.resolvers import TypeResolver, ReferenceResolver
+from jsonschema_pydantic.exceptions import ReferenceError
 
 
 def test_type_resolver_basic_types():
