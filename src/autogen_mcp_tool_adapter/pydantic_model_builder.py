@@ -48,16 +48,26 @@ class PydanticModelBuilder:
             field_type = self._get_field_type(field_schema, root_schema)
             field_info = self._get_field_constraints(field_schema)
 
-            if field_name in required:
-                field_info.update({"default": ...})
-
             if isinstance(field_type, tuple):
                 actual_type, validators = field_type
-                fields[field_name] = (actual_type, Field(**field_info))
+                fields[field_name] = (
+                    actual_type,
+                    Field(
+                        **field_info, default=... if field_name in required else None
+                    ),
+                )
             elif isinstance(field_info, type):  # Handle format types directly
-                fields[field_name] = (field_info, Field())
+                fields[field_name] = (
+                    field_info,
+                    Field(default=... if field_name in required else None),
+                )
             else:
-                fields[field_name] = (field_type, Field(**field_info))
+                fields[field_name] = (
+                    field_type,
+                    Field(
+                        **field_info, default=... if field_name in required else None
+                    ),
+                )
 
         Model = create_model(
             "Model",
@@ -79,6 +89,9 @@ class PydanticModelBuilder:
                 )
             except Exception as e:
                 raise ValueError(f"Failed to resolve reference: {str(e)}")
+
+        if "const" in field_schema:
+            return Literal[field_schema["const"]]
 
         if "enum" in field_schema:
             if not field_schema["enum"]:
@@ -265,37 +278,91 @@ class PydanticModelBuilder:
         if not schemas:
             raise ValueError("allOf must contain at least one schema")
 
-        # Merge all schemas into a single schema
-        merged_schema = {"type": "object", "properties": {}, "required": []}
+        # Get the common type from schemas if present
+        schema_types = {
+            schema.get("type")
+            for schema in schemas
+            if isinstance(schema, dict) and "type" in schema
+        }
+        if len(schema_types) > 1:
+            raise ValueError(
+                "All schemas in allOf must have the same type if specified"
+            )
 
-        for schema in schemas:
-            if not isinstance(schema, dict):
-                continue
+        common_type = next(iter(schema_types)) if schema_types else None
 
-            if schema.get("type") != "object":
-                raise ValueError("allOf only supports object schemas currently")
+        if common_type == "object":
+            # Handle object type allOf
+            merged_schema = {"type": "object", "properties": {}, "required": []}
 
-            # Merge properties
-            properties = schema.get("properties", {})
-            for prop_name, prop_schema in properties.items():
-                if prop_name in merged_schema["properties"]:
-                    # If property already exists, merge constraints
-                    existing_prop = merged_schema["properties"][prop_name]
-                    merged_schema["properties"][prop_name] = self._merge_constraints(
-                        existing_prop, prop_schema
-                    )
-                else:
-                    merged_schema["properties"][prop_name] = prop_schema
+            for schema in schemas:
+                if not isinstance(schema, dict):
+                    continue
 
-            # Merge required fields
-            required = schema.get("required", [])
-            merged_schema["required"].extend(required)
+                # Merge properties
+                properties = schema.get("properties", {})
+                for prop_name, prop_schema in properties.items():
+                    if prop_name in merged_schema["properties"]:
+                        existing_prop = merged_schema["properties"][prop_name]
+                        merged_schema["properties"][prop_name] = (
+                            self._merge_constraints(existing_prop, prop_schema)
+                        )
+                    else:
+                        merged_schema["properties"][prop_name] = prop_schema
 
-        # Remove duplicates from required fields while preserving order
-        merged_schema["required"] = list(dict.fromkeys(merged_schema["required"]))
+                # Merge required fields
+                required = schema.get("required", [])
+                merged_schema["required"].extend(required)
 
-        # Create a model from the merged schema
-        return self.create_pydantic_model(merged_schema, root_schema)
+            # Remove duplicates from required fields while preserving order
+            merged_schema["required"] = list(dict.fromkeys(merged_schema["required"]))
+
+            return self.create_pydantic_model(merged_schema, root_schema)
+        else:
+            # Handle primitive type allOf by merging constraints
+            merged_schema = {}
+            if common_type:
+                merged_schema["type"] = common_type
+
+            for schema in schemas:
+                if not isinstance(schema, dict):
+                    continue
+
+                # Handle nested combiners
+                if "anyOf" in schema:
+                    anyof_type = self._handle_any_of(schema["anyOf"])
+                    if isinstance(anyof_type, tuple):
+                        merged_schema.update({"anyOf": schema["anyOf"]})
+                        continue
+
+                # Merge all constraints
+                for key, value in schema.items():
+                    if key == "type":
+                        continue
+                    if key in merged_schema:
+                        if key in ["minimum", "minLength", "minItems"]:
+                            merged_schema[key] = max(merged_schema[key], value)
+                        elif key in ["maximum", "maxLength", "maxItems"]:
+                            merged_schema[key] = min(merged_schema[key], value)
+                        elif key == "pattern":
+                            # Combine patterns with positive lookahead
+                            merged_schema[key] = f"(?={merged_schema[key]})(?={value})"
+                        elif key == "multipleOf":
+                            # Find least common multiple
+                            from math import lcm
+
+                            merged_schema[key] = lcm(merged_schema[key], value)
+                    else:
+                        merged_schema[key] = value
+
+            # For primitive types, return the type with merged constraints
+            field_type = self._get_field_type(merged_schema, root_schema)
+            field_info = self._get_field_constraints(merged_schema)
+
+            if isinstance(field_type, tuple):
+                return field_type
+            else:
+                return (field_type, field_info)
 
     def _handle_one_of(self, schema: dict) -> Any:
         """Handle oneOf schema combinator using discriminated unions."""
