@@ -63,7 +63,7 @@ wheels = [
 ]
 
 [[package]]
-name = "json-schema-pydantic"
+name = "json-schema-to-pydantic"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/json-schema-pydantic
+      url: https://pypi.org/p/json-schema-to-pydantic
     permissions:
       id-token: write
     steps:
@@ -32,6 +32,6 @@ jobs:
 
       - name: Build package
         run: uv build
-        
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

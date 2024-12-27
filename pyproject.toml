@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "json-schema-pydantic"
+name = "json-schema-to-pydantic"
 version = "0.1.0"
 description = "A Python library for automatically generating Pydantic v2 models from JSON Schema definitions"
 readme = "README.md"

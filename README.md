@@ -17,7 +17,7 @@ A Python library for automatically generating Pydantic v2 models from JSON Schem
 ## Installation
 
 ```bash
-pip install json-schema-pydantic
+pip install json-schema-to-pydantic
 ```
 
 ## Quick Start
