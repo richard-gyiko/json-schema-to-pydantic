@@ -1,4 +1,4 @@
-# MCP AutoGen
+# JSON Schema to Pydantic
 
 A Python library for automatically generating Pydantic v2 models from JSON Schema definitions.
 
@@ -23,7 +23,7 @@ pip install json-schema-to-pydantic
 ## Quick Start
 
 ```python
-from jsonschema_pydantic import create_model
+from json_schema_pydantic import create_model
 
 # Define your JSON Schema
 schema = {
@@ -53,7 +53,7 @@ user = UserModel(
 For more complex scenarios, you can use the `PydanticModelBuilder` directly:
 
 ```python
-from jsonschema_pydantic import PydanticModelBuilder
+from json_schema_pydantic import PydanticModelBuilder
 
 builder = PydanticModelBuilder()
 model = builder.create_pydantic_model(schema, root_schema)
@@ -64,7 +64,7 @@ model = builder.create_pydantic_model(schema, root_schema)
 The library provides specific exceptions for different error cases:
 
 ```python
-from jsonschema_pydantic import (
+from json_schema_pydantic import (
     SchemaError,     # Base class for all schema errors
     TypeError,       # Invalid or unsupported type
     CombinerError,   # Error in schema combiners
