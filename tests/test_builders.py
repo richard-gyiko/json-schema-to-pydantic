@@ -1,4 +1,4 @@
-from jsonschema_pydantic.builders import ConstraintBuilder
+from json_schema_to_pydantic.builders import ConstraintBuilder
 from pydantic import EmailStr, AnyUrl
 from typing import Literal
 from datetime import datetime

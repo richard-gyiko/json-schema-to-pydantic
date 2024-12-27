@@ -14,16 +14,38 @@ A Python library for automatically generating Pydantic v2 models from JSON Schem
 - Full type hinting support
 - Clean, simple API
 
+## Requirements
+
+- Python >=3.12
+- Pydantic >=2.10.4
+
 ## Installation
 
 ```bash
 pip install json-schema-to-pydantic
 ```
 
+## Development Setup
+
+1. Clone the repository
+2. Install development dependencies:
+```bash
+# Using uv (recommended)
+uv pip install -e ".[dev]"
+
+# Or using pip
+pip install -e ".[dev]"
+```
+
+3. Run tests:
+```bash
+pytest
+```
+
 ## Quick Start
 
 ```python
-from json_schema_pydantic import create_model
+from json_schema_to_pydantic import create_model
 
 # Define your JSON Schema
 schema = {
@@ -53,7 +75,7 @@ user = UserModel(
 For more complex scenarios, you can use the `PydanticModelBuilder` directly:
 
 ```python
-from json_schema_pydantic import PydanticModelBuilder
+from json_schema_to_pydantic import PydanticModelBuilder
 
 builder = PydanticModelBuilder()
 model = builder.create_pydantic_model(schema, root_schema)
@@ -64,7 +86,7 @@ model = builder.create_pydantic_model(schema, root_schema)
 The library provides specific exceptions for different error cases:
 
 ```python
-from json_schema_pydantic import (
+from json_schema_to_pydantic import (
     SchemaError,     # Base class for all schema errors
     TypeError,       # Invalid or unsupported type
     CombinerError,   # Error in schema combiners
@@ -82,6 +104,14 @@ except ReferenceError as e:
 ## Documentation
 
 See [docs/features.md](docs/features.md) for detailed documentation of supported JSON Schema features.
+
+## Contributing
+
+1. Fork the repository
+2. Create a new branch for your feature
+3. Make your changes
+4. Run tests and ensure they pass
+5. Submit a pull request
 
 ## License
 

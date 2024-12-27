@@ -1,6 +1,6 @@
 import pytest
-from jsonschema_pydantic.resolvers import TypeResolver, ReferenceResolver
-from jsonschema_pydantic.exceptions import ReferenceError
+from json_schema_to_pydantic.resolvers import TypeResolver, ReferenceResolver
+from json_schema_to_pydantic.exceptions import ReferenceError
 
 
 def test_type_resolver_basic_types():

@@ -1,6 +1,6 @@
 import pytest
-from jsonschema_pydantic.handlers import CombinerHandler
-from jsonschema_pydantic.exceptions import CombinerError
+from json_schema_to_pydantic.handlers import CombinerHandler
+from json_schema_to_pydantic.exceptions import CombinerError
 from pydantic import BaseModel
 
 

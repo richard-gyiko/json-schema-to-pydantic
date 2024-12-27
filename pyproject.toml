@@ -26,4 +26,4 @@ pythonpath = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/jsonschema_pydantic"]
+packages = ["src/json_schema_to_pydantic"]

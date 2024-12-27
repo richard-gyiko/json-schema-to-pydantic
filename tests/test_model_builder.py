@@ -1,6 +1,6 @@
 import pytest
 from pydantic import BaseModel
-from jsonschema_pydantic.model_builder import PydanticModelBuilder
+from json_schema_to_pydantic.model_builder import PydanticModelBuilder
 
 
 def test_basic_model_creation():
