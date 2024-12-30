@@ -111,10 +111,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
-]
-
-[package.dev-dependencies]
-dev = [
     { name = "pytest-cov" },
 ]
 
@@ -122,10 +118,8 @@ dev = [
 requires-dist = [
     { name = "pydantic", extras = ["email"], specifier = ">=2.10.4" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest-cov", specifier = ">=6.0.0" }]
 
 [[package]]
 name = "packaging"
