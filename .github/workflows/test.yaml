@@ -3,8 +3,8 @@ name: Test
 on: [pull_request]
 
 jobs:
-  uv-example:
-    name: python
+  test:
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -13,18 +13,15 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          # Install a specific version of uv.
-          version: "0.5.12"
+          version: "0.5.13"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Install the project
-        run: |
-          uv pip install -e ".[dev]"
-          uv pip freeze
+      - name: Install dependencies
+        run: uv sync --all-extras
 
       - name: Run tests
         run: uv run pytest --cov --cov-report=xml
@@ -32,7 +29,7 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}  
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run linters
-        run: uvx ruff check
+        run: uv run ruff check .
