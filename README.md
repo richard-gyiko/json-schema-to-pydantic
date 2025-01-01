@@ -17,11 +17,6 @@ A Python library for automatically generating Pydantic v2 models from JSON Schem
 - Full type hinting support
 - Clean, simple API
 
-## Requirements
-
-- Python >=3.12
-- Pydantic >=2.10.4
-
 ## Installation
 
 ```bash
