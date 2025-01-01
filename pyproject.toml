@@ -4,10 +4,29 @@ build-backend = "hatchling.build"
 
 [project]
 name = "json-schema-to-pydantic"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python library for automatically generating Pydantic v2 models from JSON Schema definitions"
+license = "MIT"  # or your chosen license
+authors = [
+     { name = "Richard Gyiko", email = "gyiko.richard@outlook.com" }
+]
+keywords = ["json-schema", "pydantic", "validation", "schema", "conversion"]
+classifiers = [
+     "Development Status :: 4 - Beta",
+     "Intended Audience :: Developers",
+     "License :: OSI Approved :: MIT License",
+     "Programming Language :: Python :: 3",
+     "Programming Language :: Python :: 3.10",
+     "Programming Language :: Python :: 3.11",
+     "Programming Language :: Python :: 3.12",
+     "Topic :: Software Development :: Libraries :: Python Modules",
+     "Typing :: Typed",
+]
+urls.Homepage = "https://github.com/richard-gyiko/json-schema-to-pydantic"
+urls.Bug-Tracker = "https://github.com/richard-gyiko/json-schema-to-pydantic/issues"
+urls.Documentation = "https://github.com/richard-gyiko/json-schema-to-pydantic#readme"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic[email]>=2.10.4",
 ]
