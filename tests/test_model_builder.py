@@ -1,11 +1,15 @@
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from json_schema_to_pydantic.model_builder import PydanticModelBuilder
+
+
+class CustomBaseModel(BaseModel):
+    test_case: str = Field(default="test", description="A test case")
 
 
 def test_basic_model_creation():
     """Test basic model creation with simple properties."""
-    builder = PydanticModelBuilder()
+    builder = PydanticModelBuilder(base_model_type=CustomBaseModel)
     schema = {
         "title": "TestModel",
         "description": "A test model",
@@ -14,11 +18,11 @@ def test_basic_model_creation():
         "required": ["name"],
     }
 
-    model = builder.create_pydantic_model(schema)
+    model = builder.create_pydantic_model(schema, CustomBaseModel)
 
     assert model.__name__ == "TestModel"
     assert model.__doc__ == "A test model"
-    assert issubclass(model, BaseModel)
+    assert issubclass(model, CustomBaseModel)
 
     # Test instance creation
     instance = model(name="test", age=25)
