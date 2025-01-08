@@ -1,4 +1,4 @@
-from typing import Any, Type, Dict, Optional
+from typing import Any, Optional, Type, Dict, TypeVar
 from pydantic import BaseModel, create_model, Field
 
 from .builders import ConstraintBuilder
@@ -7,18 +7,22 @@ from .handlers import CombinerHandler
 from .interfaces import IModelBuilder
 
 
-class PydanticModelBuilder(IModelBuilder):
+T = TypeVar("T", bound=BaseModel)
+
+
+class PydanticModelBuilder(IModelBuilder[T]):
     """Creates Pydantic models from JSON Schema definitions"""
 
-    def __init__(self):
+    def __init__(self, base_model_type: Type[T] = BaseModel):
         self.type_resolver = TypeResolver()
         self.constraint_builder = ConstraintBuilder()
         self.reference_resolver = ReferenceResolver()
         self.combiner_handler = CombinerHandler()
+        self.base_model_type = base_model_type
 
     def create_pydantic_model(
         self, schema: Dict[str, Any], root_schema: Optional[Dict[str, Any]] = None
-    ) -> Type[BaseModel]:
+    ) -> Type[T]:
         """
         Creates a Pydantic model from a JSON Schema definition.
 
@@ -60,7 +64,7 @@ class PydanticModelBuilder(IModelBuilder):
             fields[field_name] = (field_type, field_info)
 
         # Create the model
-        model = create_model(title, **fields)
+        model = create_model(title, __base__=self.base_model_type, **fields)
         if description:
             model.__doc__ = description
 

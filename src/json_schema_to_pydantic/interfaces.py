@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Type, Dict, List, Optional
+from typing import Any, Optional, Type, Dict, List, Generic, TypeVar
 from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class ITypeResolver(ABC):
@@ -47,10 +49,10 @@ class IReferenceResolver(ABC):
         pass
 
 
-class IModelBuilder(ABC):
+class IModelBuilder(ABC, Generic[T]):
     @abstractmethod
     def create_pydantic_model(
         self, schema: Dict[str, Any], root_schema: Optional[Dict[str, Any]] = None
-    ) -> Type[BaseModel]:
+    ) -> Type[T]:
         """Creates a Pydantic model from JSON Schema"""
         pass
