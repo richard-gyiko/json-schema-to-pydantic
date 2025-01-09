@@ -1,6 +1,6 @@
 from typing import Any, Set, Optional
 from datetime import datetime
-from pydantic import EmailStr, AnyUrl
+from pydantic import AnyUrl
 from uuid import UUID
 from .interfaces import ITypeResolver, IReferenceResolver
 from .exceptions import TypeError, ReferenceError
@@ -65,7 +65,7 @@ class TypeResolver(ITypeResolver):
             format_type = schema["format"]
             format_map = {
                 "date-time": datetime,
-                "email": EmailStr,
+                "email": str,
                 "uri": AnyUrl,
                 "uuid": UUID,
             }

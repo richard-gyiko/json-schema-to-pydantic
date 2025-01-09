@@ -1,5 +1,5 @@
 from json_schema_to_pydantic.builders import ConstraintBuilder
-from pydantic import EmailStr, AnyUrl
+from pydantic import AnyUrl
 from typing import Literal
 from datetime import datetime
 from uuid import UUID
@@ -20,7 +20,13 @@ def test_string_constraints():
 def test_format_constraints():
     builder = ConstraintBuilder()
 
-    assert builder.build_constraints({"format": "email"}) == EmailStr
+    email_constraints = builder.build_constraints({"format": "email"})
+    assert isinstance(email_constraints, dict)
+    assert "pattern" in email_constraints
+    assert (
+        email_constraints["pattern"]
+        == r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    )
     assert builder.build_constraints({"format": "date-time"}) == datetime
     assert builder.build_constraints({"format": "uuid"}) == UUID
 
@@ -67,8 +73,10 @@ def test_multiple_constraints():
         {"minLength": 3, "maxLength": 10, "pattern": "^[A-Z].*$", "format": "email"}
     )
 
-    # Format should take precedence and return EmailStr directly
-    assert constraints == EmailStr
+    assert "pattern" in constraints
+    assert constraints["pattern"] == r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    assert constraints["min_length"] == 3
+    assert constraints["max_length"] == 10
 
 
 def test_empty_schema():
