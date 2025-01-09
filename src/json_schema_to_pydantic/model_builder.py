@@ -103,7 +103,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         # Add constraints
         constraints = self.constraint_builder.build_constraints(field_schema)
-        if isinstance(constraints, type):  # Handle special types like EmailStr
+        if isinstance(constraints, type):
             pass  # Type will be handled by type_resolver
         elif isinstance(constraints, dict):
             field_kwargs.update(constraints)

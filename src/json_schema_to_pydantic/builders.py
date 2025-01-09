@@ -1,8 +1,10 @@
 from typing import Dict, Any, Literal
-from pydantic import EmailStr, AnyUrl
+from pydantic import AnyUrl
 from uuid import UUID
 from datetime import datetime
 from .interfaces import IConstraintBuilder
+
+EMAIL_PATTERN = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
 
 class ConstraintBuilder(IConstraintBuilder):
@@ -26,7 +28,8 @@ class ConstraintBuilder(IConstraintBuilder):
         if "format" in schema:
             format_type = schema["format"]
             if format_type == "email":
-                return EmailStr
+                constraints["pattern"] = EMAIL_PATTERN
+                return constraints
             elif format_type == "date-time":
                 return datetime
             elif format_type == "uri":
@@ -85,11 +88,11 @@ class ConstraintBuilder(IConstraintBuilder):
         for constraint in ["minLength", "maxLength", "pattern"]:
             if constraint in schema2:
                 if constraint in merged:
-                    if "min" in constraint:
+                    if "min" in constraint.lower():
                         merged[constraint] = max(
                             merged[constraint], schema2[constraint]
                         )
-                    elif "max" in constraint:
+                    elif "max" in constraint.lower():
                         merged[constraint] = min(
                             merged[constraint], schema2[constraint]
                         )
