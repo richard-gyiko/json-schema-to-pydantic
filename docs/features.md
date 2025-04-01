@@ -14,7 +14,6 @@ This document outlines the JSON Schema features supported by the library.
 ## String Formats
 
 Supported formats with their Python types:
-- `email`: `pydantic.EmailStr`
 - `date-time`: `datetime.datetime`
 - `uri`: `pydantic.AnyUrl`
 - `uuid`: `uuid.UUID`
