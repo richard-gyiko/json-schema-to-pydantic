@@ -29,7 +29,7 @@ class CombinerHandler(ICombinerHandler):
 
         python_type = self.type_resolver.resolve_type(prop_schema, {})
 
-        if isinstance(constraints, type):  # Handle special types like EmailStr
+        if isinstance(constraints, type):
             python_type = constraints
         elif "const" in prop_schema:
             python_type = Literal[prop_schema["const"]]
