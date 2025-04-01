@@ -129,7 +129,7 @@ def test_type_resolver_format_handling():
     assert (
         resolver.resolve_type({"type": "string", "format": "date-time"}, {}) == datetime
     )
-    assert resolver.resolve_type({"type": "string", "format": "email"}, {}) == str
+    assert resolver.resolve_type({"type": "string", "format": "email"}, {}) is str
     assert resolver.resolve_type({"type": "string", "format": "uri"}, {}) == AnyUrl
     assert resolver.resolve_type({"type": "string", "format": "uuid"}, {}) == UUID
 
