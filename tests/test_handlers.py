@@ -1,7 +1,8 @@
 import pytest
-from json_schema_to_pydantic.handlers import CombinerHandler
-from json_schema_to_pydantic.exceptions import CombinerError
 from pydantic import BaseModel
+
+from json_schema_to_pydantic.exceptions import CombinerError
+from json_schema_to_pydantic.handlers import CombinerHandler
 
 
 def test_all_of_handler():

@@ -1,8 +1,10 @@
-from json_schema_to_pydantic.builders import ConstraintBuilder
-from pydantic import AnyUrl
-from typing import Literal
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
+
+from pydantic import AnyUrl
+
+from json_schema_to_pydantic.builders import ConstraintBuilder
 
 
 def test_string_constraints():

@@ -1,6 +1,13 @@
 import pytest
-from json_schema_to_pydantic.resolvers import TypeResolver, ReferenceResolver
-from json_schema_to_pydantic.exceptions import ReferenceError
+
+# Explicitly import custom TypeError with an alias
+from json_schema_to_pydantic.exceptions import (
+    ReferenceError,
+)
+from json_schema_to_pydantic.exceptions import (
+    TypeError as JsonSchemaTypeError,
+)
+from json_schema_to_pydantic.resolvers import ReferenceResolver, TypeResolver
 
 
 def test_type_resolver_basic_types():
@@ -19,6 +26,24 @@ def test_type_resolver_array():
     from typing import List
 
     assert resolver.resolve_type(schema, {}) == List[str]
+
+
+def test_type_resolver_undefined_array_items():
+    """Test handling of arrays without defined item types."""
+    resolver = TypeResolver()
+    from typing import Any, List
+
+    # Test with undefined items and allow_undefined_array_items=False (default)
+    schema = {"type": "array"}
+    # Use the explicit alias in pytest.raises
+    with pytest.raises(
+        JsonSchemaTypeError, match="Array type must specify 'items' schema"
+    ):
+        resolver.resolve_type(schema, {})
+
+    # Test with undefined items and allow_undefined_array_items=True
+    result = resolver.resolve_type(schema, {}, allow_undefined_array_items=True)
+    assert result == List[Any]
 
 
 def test_reference_resolver():
@@ -123,8 +148,9 @@ def test_type_resolver_format_handling():
     """Test handling of format specifications."""
     resolver = TypeResolver()
     from datetime import datetime
-    from pydantic import AnyUrl
     from uuid import UUID
+
+    from pydantic import AnyUrl
 
     assert (
         resolver.resolve_type({"type": "string", "format": "date-time"}, {}) == datetime
@@ -147,7 +173,7 @@ def test_type_resolver_enum():
 def test_type_resolver_const():
     """Test handling of const values."""
     resolver = TypeResolver()
-    from typing import Literal, Optional, Any
+    from typing import Any, Literal, Optional
 
     schema = {"const": 42}
     result = resolver.resolve_type(schema, {})
@@ -162,7 +188,7 @@ def test_type_resolver_const():
 def test_type_resolver_null():
     """Test handling of null type."""
     resolver = TypeResolver()
-    from typing import Optional, Any
+    from typing import Any, Optional
 
     schema = {"type": "null"}
     result = resolver.resolve_type(schema, {})
