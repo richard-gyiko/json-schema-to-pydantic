@@ -14,8 +14,6 @@ class TypeResolver(ITypeResolver):
     def resolve_type(
         self, schema: dict, root_schema: dict, allow_undefined_array_items: bool = False
     ) -> Any:
-        print(f"Allow undefined array items: {allow_undefined_array_items}")
-
         """Get the Pydantic field type for a JSON schema field."""
         if not isinstance(schema, dict):
             raise TypeError(f"Invalid schema: expected dict, got {type(schema)}")
