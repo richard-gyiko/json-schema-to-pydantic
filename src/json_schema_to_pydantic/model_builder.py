@@ -1,11 +1,11 @@
-from typing import Any, Optional, Type, Dict, TypeVar
-from pydantic import BaseModel, create_model, Field
+from typing import Any, Dict, Optional, Type, TypeVar
+
+from pydantic import BaseModel, Field, create_model
 
 from .builders import ConstraintBuilder
-from .resolvers import TypeResolver, ReferenceResolver
 from .handlers import CombinerHandler
 from .interfaces import IModelBuilder
-
+from .resolvers import ReferenceResolver, TypeResolver
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -21,7 +21,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
         self.base_model_type = base_model_type
 
     def create_pydantic_model(
-        self, schema: Dict[str, Any], root_schema: Optional[Dict[str, Any]] = None
+        self,
+        schema: Dict[str, Any],
+        root_schema: Optional[Dict[str, Any]] = None,
+        allow_undefined_array_items: bool = False,
     ) -> Type[T]:
         """
         Creates a Pydantic model from a JSON Schema definition.
@@ -39,16 +42,24 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle references
         if "$ref" in schema:
             schema = self.reference_resolver.resolve_ref(
-                schema["$ref"], schema, root_schema
+                schema["$ref"],
+                schema,
+                root_schema,
             )
 
         # Handle combiners
         if "allOf" in schema:
-            return self.combiner_handler.handle_all_of(schema["allOf"], root_schema)
+            return self.combiner_handler.handle_all_of(
+                schema["allOf"], root_schema, allow_undefined_array_items
+            )
         if "anyOf" in schema:
-            return self.combiner_handler.handle_any_of(schema["anyOf"], root_schema)
+            return self.combiner_handler.handle_any_of(
+                schema["anyOf"], root_schema, allow_undefined_array_items
+            )
         if "oneOf" in schema:
-            return self.combiner_handler.handle_one_of(schema, root_schema)
+            return self.combiner_handler.handle_one_of(
+                schema["oneOf"], root_schema, allow_undefined_array_items
+            )
 
         # Get model properties
         title = schema.get("title", "DynamicModel")
@@ -59,7 +70,9 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Build field definitions
         fields = {}
         for field_name, field_schema in properties.items():
-            field_type = self._get_field_type(field_schema, root_schema)
+            field_type = self._get_field_type(
+                field_schema, root_schema, allow_undefined_array_items
+            )
             field_info = self._build_field_info(field_schema, field_name in required)
             fields[field_name] = (field_type, field_info)
 
@@ -71,7 +84,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
         return model
 
     def _get_field_type(
-        self, field_schema: Dict[str, Any], root_schema: Dict[str, Any]
+        self,
+        field_schema: Dict[str, Any],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool = False,
     ) -> Any:
         """Resolves the Python type for a field schema."""
         if "$ref" in field_schema:
@@ -82,20 +98,28 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle combiners
         if "allOf" in field_schema:
             return self.combiner_handler.handle_all_of(
-                field_schema["allOf"], root_schema
+                field_schema["allOf"], root_schema, allow_undefined_array_items
             )
         if "anyOf" in field_schema:
             return self.combiner_handler.handle_any_of(
-                field_schema["anyOf"], root_schema
+                field_schema["anyOf"], root_schema, allow_undefined_array_items
             )
         if "oneOf" in field_schema:
-            return self.combiner_handler.handle_one_of(field_schema, root_schema)
+            return self.combiner_handler.handle_one_of(
+                field_schema, root_schema, allow_undefined_array_items
+            )
 
         # Handle nested objects by recursively creating models
         if field_schema.get("type") == "object" and "properties" in field_schema:
-            return self.create_pydantic_model(field_schema, root_schema)
+            return self.create_pydantic_model(
+                field_schema, root_schema, allow_undefined_array_items
+            )
 
-        return self.type_resolver.resolve_type(field_schema, root_schema)
+        return self.type_resolver.resolve_type(
+            schema=field_schema,
+            root_schema=root_schema,
+            allow_undefined_array_items=allow_undefined_array_items,
+        )
 
     def _build_field_info(self, field_schema: Dict[str, Any], required: bool) -> Field:
         """Creates a Pydantic Field with constraints from schema."""

@@ -1,7 +1,9 @@
-from typing import Dict, Any, Literal
-from pydantic import AnyUrl
-from uuid import UUID
 from datetime import datetime
+from typing import Any, Dict, Literal
+from uuid import UUID
+
+from pydantic import AnyUrl
+
 from .interfaces import IConstraintBuilder
 
 EMAIL_PATTERN = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"

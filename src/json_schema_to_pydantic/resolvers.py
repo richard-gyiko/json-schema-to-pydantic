@@ -1,22 +1,26 @@
-from typing import Any, Set, Optional
 from datetime import datetime
-from pydantic import AnyUrl
+from typing import Any, List, Literal, Optional, Set
 from uuid import UUID
-from .interfaces import ITypeResolver, IReferenceResolver
-from .exceptions import TypeError, ReferenceError
+
+from pydantic import AnyUrl
+
+from .exceptions import ReferenceError, TypeError
+from .interfaces import IReferenceResolver, ITypeResolver
 
 
 class TypeResolver(ITypeResolver):
     """Resolves JSON Schema types to Pydantic types"""
 
-    def resolve_type(self, schema: dict, root_schema: dict) -> Any:
+    def resolve_type(
+        self, schema: dict, root_schema: dict, allow_undefined_array_items: bool = False
+    ) -> Any:
+        print(f"Allow undefined array items: {allow_undefined_array_items}")
+
         """Get the Pydantic field type for a JSON schema field."""
         if not isinstance(schema, dict):
             raise TypeError(f"Invalid schema: expected dict, got {type(schema)}")
 
         if "const" in schema:
-            from typing import Literal
-
             if schema["const"] is None:
                 return Optional[Any]
             return Literal[schema["const"]]
@@ -31,15 +35,17 @@ class TypeResolver(ITypeResolver):
                 other_types = [t for t in types if t != "null"]
                 if len(other_types) == 1:
                     return Optional[
-                        self.resolve_type({"type": other_types[0]}, root_schema)
+                        self.resolve_type(
+                            schema={"type": other_types[0]},
+                            root_schema=root_schema,
+                            allow_undefined_array_items=allow_undefined_array_items,
+                        )
                     ]
             raise TypeError("Unsupported type combination")
 
         if "enum" in schema:
             if not schema["enum"]:
                 raise TypeError("Enum must have at least one value")
-            from typing import Literal
-
             return Literal[tuple(schema["enum"])]
 
         schema_type = schema.get("type")
@@ -49,15 +55,18 @@ class TypeResolver(ITypeResolver):
         if schema_type == "array":
             items_schema = schema.get("items")
             if not items_schema:
-                raise TypeError("Array type must specify 'items' schema")
+                if allow_undefined_array_items:
+                    return List[Any]  # Allow any type if items are not defined
+                else:
+                    raise TypeError("Array type must specify 'items' schema")
 
-            item_type = self.resolve_type(items_schema, root_schema)
+            item_type = self.resolve_type(
+                schema=items_schema,
+                root_schema=root_schema,
+                allow_undefined_array_items=allow_undefined_array_items,
+            )
             if schema.get("uniqueItems", False):
-                from typing import Set
-
                 return Set[item_type]
-            from typing import List
-
             return List[item_type]
 
         # Handle format for string types

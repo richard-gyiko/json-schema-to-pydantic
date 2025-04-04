@@ -1,8 +1,10 @@
-from typing import Dict, Any, List, Type, Union, Annotated, Literal, Optional
-from pydantic import BaseModel, create_model, Field, Discriminator, RootModel
-from .interfaces import ICombinerHandler
-from .exceptions import CombinerError
+from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union
+
+from pydantic import BaseModel, Discriminator, Field, RootModel, create_model
+
 from .builders import ConstraintBuilder
+from .exceptions import CombinerError
+from .interfaces import ICombinerHandler
 from .resolvers import TypeResolver
 
 
@@ -14,7 +16,10 @@ class CombinerHandler(ICombinerHandler):
         self.type_resolver = TypeResolver()
 
     def _convert_property(
-        self, prop_schema: Dict[str, Any], required_fields: List[str] = None
+        self,
+        prop_schema: Dict[str, Any],
+        required_fields: List[str] = None,
+        allow_undefined_array_items: bool = False,
     ) -> tuple:
         """Convert JSON Schema property to Pydantic field."""
         if required_fields is None:
@@ -27,7 +32,11 @@ class CombinerHandler(ICombinerHandler):
         if "description" in prop_schema:
             field_kwargs["description"] = prop_schema["description"]
 
-        python_type = self.type_resolver.resolve_type(prop_schema, {})
+        python_type = self.type_resolver.resolve_type(
+            schema=prop_schema,
+            root_schema={},
+            allow_undefined_array_items=allow_undefined_array_items,
+        )
 
         if isinstance(constraints, type):
             python_type = constraints
@@ -46,7 +55,10 @@ class CombinerHandler(ICombinerHandler):
         return (python_type, Field(**field_kwargs))
 
     def handle_all_of(
-        self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
+        self,
+        schemas: List[Dict[str, Any]],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool = False,
     ) -> Type[BaseModel]:
         """Combines multiple schemas with AND logic."""
         if not schemas:
@@ -77,7 +89,9 @@ class CombinerHandler(ICombinerHandler):
 
         # Convert properties to annotated fields
         field_definitions = {
-            name: self._convert_property(prop)
+            name: self._convert_property(
+                prop, allow_undefined_array_items=allow_undefined_array_items
+            )
             for name, prop in merged_properties.items()
         }
 
@@ -86,7 +100,10 @@ class CombinerHandler(ICombinerHandler):
         )
 
     def handle_any_of(
-        self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
+        self,
+        schemas: List[Dict[str, Any]],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool = False,
     ) -> Any:
         """Allows validation against any of the given schemas."""
         if not schemas:
@@ -100,7 +117,9 @@ class CombinerHandler(ICombinerHandler):
             if schema.get("type") == "object":
                 properties = schema.get("properties", {})
                 field_definitions = {
-                    name: self._convert_property(prop)
+                    name: self._convert_property(
+                        prop, allow_undefined_array_items=allow_undefined_array_items
+                    )
                     for name, prop in properties.items()
                 }
                 model = create_model(
@@ -109,13 +128,18 @@ class CombinerHandler(ICombinerHandler):
                 possible_types.append(model)
             else:
                 possible_types.append(
-                    self.type_resolver.resolve_type(schema, root_schema)
+                    self.type_resolver.resolve_type(
+                        schema, root_schema, allow_undefined_array_items
+                    )
                 )
 
         return Union[tuple(possible_types)]
 
     def handle_one_of(
-        self, schema: Dict[str, Any], root_schema: Dict[str, Any]
+        self,
+        schema: Dict[str, Any],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool = False,
     ) -> Type[BaseModel]:
         """Implements discriminated unions using a type field."""
         schemas = schema.get("oneOf", [])
@@ -153,7 +177,9 @@ class CombinerHandler(ICombinerHandler):
                     )
                 else:
                     field_type, field_info = self._convert_property(
-                        prop_schema, required
+                        prop_schema,
+                        required,
+                        allow_undefined_array_items=allow_undefined_array_items,
                     )
                     if name in required:
                         description = prop_schema.get("description")

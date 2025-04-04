@@ -1,17 +1,17 @@
-from .model_builder import PydanticModelBuilder
 from .exceptions import (
-    SchemaError,
-    TypeError,
     CombinerError,
     ReferenceError,
+    SchemaError,
+    TypeError,
 )
+from .model_builder import PydanticModelBuilder
 
 __version__ = "0.2.2"
 
 
-from typing import Type, Optional, Dict, Any, TypeVar
-from pydantic import BaseModel
+from typing import Any, Dict, Optional, Type, TypeVar
 
+from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -20,6 +20,7 @@ def create_model(
     schema: Dict[str, Any],
     base_model_type: Type[T] = BaseModel,
     root_schema: Optional[Dict[str, Any]] = None,
+    allow_undefined_array_items: bool = False,
 ) -> Type[T]:
     """
     Create a Pydantic model from a JSON Schema.
@@ -39,7 +40,9 @@ def create_model(
         ReferenceError: If there's an error resolving references
     """
     builder = PydanticModelBuilder(base_model_type=base_model_type)
-    return builder.create_pydantic_model(schema, root_schema)
+    return builder.create_pydantic_model(
+        schema, root_schema, allow_undefined_array_items
+    )
 
 
 __all__ = [
