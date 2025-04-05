@@ -14,10 +14,18 @@ class PydanticModelBuilder(IModelBuilder[T]):
     """Creates Pydantic models from JSON Schema definitions"""
 
     def __init__(self, base_model_type: Type[T] = BaseModel):
+        # Instantiate resolvers and builders directly
         self.type_resolver = TypeResolver()
         self.constraint_builder = ConstraintBuilder()
         self.reference_resolver = ReferenceResolver()
-        self.combiner_handler = CombinerHandler()
+        # Pass resolvers and method references as callbacks to CombinerHandler
+        self.combiner_handler = CombinerHandler(
+            type_resolver=self.type_resolver,
+            constraint_builder=self.constraint_builder,
+            reference_resolver=self.reference_resolver,
+            recursive_field_builder=self._get_field_type,
+            field_info_builder=self._build_field_info,
+        )
         self.base_model_type = base_model_type
 
     def create_pydantic_model(
