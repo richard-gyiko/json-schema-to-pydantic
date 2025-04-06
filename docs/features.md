@@ -86,7 +86,9 @@ Creates discriminated unions using a type field:
 
 ## References
 
-Local references are supported with circular reference detection:
+Local references (`$ref`) are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. Circular reference detection is also implemented.
+
+Example:
 ```json
 {
     "type": "object",
