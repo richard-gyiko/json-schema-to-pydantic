@@ -44,9 +44,29 @@ Example:
 - `multipleOf`: Value must be multiple of this number
 
 ### Array Constraints
-- `items`: Schema for array items
+- `items`: Schema for array items. By default, this is required for arrays.
 - `minItems`/`maxItems`: Array length bounds
 - `uniqueItems`: Enforces unique items
+
+### Handling Arrays Without `items`
+
+By default, the library requires arrays to have an `items` schema defined. However, some schemas might omit this. You can allow arrays without a defined `items` schema by passing `allow_undefined_array_items=True` to `create_model` or `PydanticModelBuilder.create_pydantic_model`. When enabled, such arrays will be typed as `List[Any]`.
+
+```python
+from json_schema_to_pydantic import create_model
+
+# Schema with an array lacking 'items'
+schema = {"type": "object", "properties": {"mixed_tags": {"type": "array"}}}
+
+# This would raise a TypeError by default
+# model = create_model(schema)
+
+# Allow arrays without 'items'
+RelaxedModel = create_model(schema, allow_undefined_array_items=True)
+
+# The field 'mixed_tags' will be List[Any]
+instance = RelaxedModel(mixed_tags=[1, "string", True, None])
+```
 
 ## Schema Combiners
 
@@ -86,7 +106,9 @@ Creates discriminated unions using a type field:
 
 ## References
 
-Local references are supported with circular reference detection:
+Local references (`$ref`) are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. Circular reference detection is also implemented.
+
+Example:
 ```json
 {
     "type": "object",

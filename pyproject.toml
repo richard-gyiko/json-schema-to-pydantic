@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "json-schema-to-pydantic"
-version = "0.2.3"
+version = "0.2.4"
 description = "A Python library for automatically generating Pydantic v2 models from JSON Schema definitions"
 license = "MIT"  # or your chosen license
 authors = [

@@ -66,6 +66,13 @@ user = UserModel(
     email="john@example.com",
     age=30
 )
+
+# Example with relaxed array item validation
+RelaxedModel = create_model(
+    {"type": "object", "properties": {"tags": {"type": "array"}}},
+    allow_undefined_array_items=True
+)
+relaxed_instance = RelaxedModel(tags=[1, "two", True])
 ```
 
 ## Advanced Usage
