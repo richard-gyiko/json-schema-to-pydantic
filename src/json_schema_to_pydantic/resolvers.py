@@ -21,9 +21,7 @@ class TypeResolver(ITypeResolver):
         # Handle references first
         if "$ref" in schema:
             reference_resolver = ReferenceResolver()
-            schema = reference_resolver.resolve_ref(
-                schema["$ref"], schema, root_schema
-            )
+            schema = reference_resolver.resolve_ref(schema["$ref"], schema, root_schema)
 
         if "const" in schema:
             if schema["const"] is None:
@@ -71,7 +69,7 @@ class TypeResolver(ITypeResolver):
                     return List[Any]  # Allow any type if items are not defined
                 else:
                     raise TypeError("Array type must specify 'items' schema")
-            
+
             # Handle references in array items
             if isinstance(items_schema, dict) and "$ref" in items_schema:
                 # We need to resolve the reference before proceeding

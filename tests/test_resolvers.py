@@ -279,41 +279,34 @@ def test_reference_resolver_malformed_ref():
 def test_type_resolver_nested_array_references():
     """Test handling of nested references in array items."""
     resolver = TypeResolver()
-    
+
     # Create a schema with a reference in an array item
     root_schema = {
         "definitions": {
             "data": {
                 "type": "object",
-                "properties": {
-                    "b": {"type": "integer"}
-                },
-                "required": ["b"]
+                "properties": {"b": {"type": "integer"}},
+                "required": ["b"],
             }
         },
         "type": "object",
-        "properties": {
-            "a": {
-                "type": "array",
-                "items": {"$ref": "#/definitions/data"}
-            }
-        },
-        "required": ["a"]
+        "properties": {"a": {"type": "array", "items": {"$ref": "#/definitions/data"}}},
+        "required": ["a"],
     }
-    
+
     # Test resolving the array type with nested reference
     array_schema = root_schema["properties"]["a"]
     result_type = resolver.resolve_type(array_schema, root_schema)
-    
-    from typing import List, get_origin, get_args
-    
+
+    from typing import get_args, get_origin
+
     # The result should be List[dict]
-    assert get_origin(result_type) == list
-    assert get_args(result_type)[0] == dict
-    
+    assert get_origin(result_type) is list
+    assert get_args(result_type)[0] is dict
+
     # Verify we can create and validate a model with this schema
     from json_schema_to_pydantic import create_model
-    
+
     model = create_model(root_schema)
     instance = model.model_validate({"a": [{"b": 1}, {"b": 2}]})
     # Access as dictionary items since they're dictionaries, not models
@@ -324,7 +317,7 @@ def test_type_resolver_nested_array_references():
 def test_type_resolver_complex_nested_references():
     """Test handling of complex nested references in array items."""
     resolver = TypeResolver()
-    
+
     # Create a more complex schema with nested references
     root_schema = {
         "definitions": {
@@ -332,9 +325,9 @@ def test_type_resolver_complex_nested_references():
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "value": {"type": "integer"}
+                    "value": {"type": "integer"},
                 },
-                "required": ["name", "value"]
+                "required": ["name", "value"],
             },
             "complex_item": {
                 "type": "object",
@@ -342,61 +335,55 @@ def test_type_resolver_complex_nested_references():
                     "id": {"type": "string"},
                     "nested_items": {
                         "type": "array",
-                        "items": {"$ref": "#/definitions/nested_item"}
+                        "items": {"$ref": "#/definitions/nested_item"},
                     },
                     "metadata": {
                         "type": ["object", "null"],
-                        "additionalProperties": {"type": "string"}
-                    }
+                        "additionalProperties": {"type": "string"},
+                    },
                 },
-                "required": ["id", "nested_items"]
-            }
+                "required": ["id", "nested_items"],
+            },
         },
         "type": "object",
         "properties": {
-            "items": {
-                "type": "array",
-                "items": {"$ref": "#/definitions/complex_item"}
-            },
-            "description": {"type": ["string", "null"]}
+            "items": {"type": "array", "items": {"$ref": "#/definitions/complex_item"}},
+            "description": {"type": ["string", "null"]},
         },
-        "required": ["items"]
+        "required": ["items"],
     }
-    
+
     # Test resolving the array type with complex nested references
     items_schema = root_schema["properties"]["items"]
     result_type = resolver.resolve_type(items_schema, root_schema)
-    
-    from typing import List, get_origin, get_args
-    
+
+    from typing import get_args, get_origin
+
     # The result should be List[dict]
-    assert get_origin(result_type) == list
-    assert get_args(result_type)[0] == dict
-    
+    assert get_origin(result_type) is list
+    assert get_args(result_type)[0] is dict
+
     # Verify we can create and validate a model with this schema
     from json_schema_to_pydantic import create_model
-    
+
     model = create_model(root_schema)
-    instance = model.model_validate({
-        "items": [
-            {
-                "id": "item1",
-                "nested_items": [
-                    {"name": "nested1", "value": 10},
-                    {"name": "nested2", "value": 20}
-                ],
-                "metadata": {"key1": "value1", "key2": "value2"}
-            },
-            {
-                "id": "item2",
-                "nested_items": [
-                    {"name": "nested3", "value": 30}
-                ]
-            }
-        ],
-        "description": "A complex nested structure"
-    })
-    
+    instance = model.model_validate(
+        {
+            "items": [
+                {
+                    "id": "item1",
+                    "nested_items": [
+                        {"name": "nested1", "value": 10},
+                        {"name": "nested2", "value": 20},
+                    ],
+                    "metadata": {"key1": "value1", "key2": "value2"},
+                },
+                {"id": "item2", "nested_items": [{"name": "nested3", "value": 30}]},
+            ],
+            "description": "A complex nested structure",
+        }
+    )
+
     # Verify the structure was correctly parsed
     # Access as dictionary items since they're dictionaries, not models
     assert instance.items[0]["id"] == "item1"
