@@ -106,7 +106,7 @@ Creates discriminated unions using a type field:
 
 ## References
 
-Local references (`$ref`) are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. Circular reference detection is also implemented.
+Local references (`$ref`) are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. References can be used in any schema location, including as array items and within nested structures. Circular reference detection is also implemented.
 
 Example:
 ```json
@@ -122,6 +122,38 @@ Example:
                 "children": {
                     "type": "array",
                     "items": {"$ref": "#/definitions/Node"}
+                }
+            }
+        }
+    }
+}
+```
+
+Example with nested references in array items:
+```json
+{
+    "type": "object",
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": {"$ref": "#/definitions/ComplexItem"}
+        }
+    },
+    "definitions": {
+        "NestedItem": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "value": {"type": "integer"}
+            }
+        },
+        "ComplexItem": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "nested_items": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/NestedItem"}
                 }
             }
         }

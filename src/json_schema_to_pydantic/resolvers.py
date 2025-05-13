@@ -18,6 +18,13 @@ class TypeResolver(ITypeResolver):
         if not isinstance(schema, dict):
             raise TypeError(f"Invalid schema: expected dict, got {type(schema)}")
 
+        # Handle references first
+        if "$ref" in schema:
+            reference_resolver = ReferenceResolver()
+            schema = reference_resolver.resolve_ref(
+                schema["$ref"], schema, root_schema
+            )
+
         if "const" in schema:
             if schema["const"] is None:
                 return Optional[Any]
@@ -46,9 +53,16 @@ class TypeResolver(ITypeResolver):
                 raise TypeError("Enum must have at least one value")
             return Literal[tuple(schema["enum"])]
 
+        # Infer type if not explicitly specified
         schema_type = schema.get("type")
         if not schema_type:
-            raise TypeError("Schema must specify a type")
+            # Infer type based on schema structure
+            if "properties" in schema:
+                schema_type = "object"
+            elif "items" in schema:
+                schema_type = "array"
+            else:
+                raise TypeError("Schema must specify a type")
 
         if schema_type == "array":
             items_schema = schema.get("items")
@@ -57,6 +71,14 @@ class TypeResolver(ITypeResolver):
                     return List[Any]  # Allow any type if items are not defined
                 else:
                     raise TypeError("Array type must specify 'items' schema")
+            
+            # Handle references in array items
+            if isinstance(items_schema, dict) and "$ref" in items_schema:
+                # We need to resolve the reference before proceeding
+                reference_resolver = ReferenceResolver()
+                items_schema = reference_resolver.resolve_ref(
+                    items_schema["$ref"], items_schema, root_schema
+                )
 
             item_type = self.resolve_type(
                 schema=items_schema,
