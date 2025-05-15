@@ -6,7 +6,7 @@ from .exceptions import (
 )
 from .model_builder import PydanticModelBuilder
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 
 
 from typing import Any, Dict, Optional, Type, TypeVar
