@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [project]
@@ -44,7 +44,10 @@ pythonpath = [
 ]
 
 [tool.hatch.version]
-path = "src/json_schema_to_pydantic/__init__.py"
+source = "uv-dynamic-versioning"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/json_schema_to_pydantic"]
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
