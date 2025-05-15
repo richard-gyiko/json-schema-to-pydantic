@@ -26,7 +26,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --frozen --all-extras --dev
 
       - name: Run tests
         run: uv run pytest --cov --junitxml=junit.xml -o junit_family=legacy
