@@ -1,6 +1,13 @@
 from typing import Annotated, Any, Callable, Dict, List, Literal, Type, Union
 
-from pydantic import BaseModel, Discriminator, Field, RootModel, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Discriminator,
+    Field,
+    RootModel,
+    create_model,
+)
 
 from .exceptions import CombinerError
 from .interfaces import (
@@ -79,7 +86,9 @@ class CombinerHandler(ICombinerHandler):
             field_definitions[name] = (field_type, field_info)
 
         return create_model(
-            "AllOfModel", **field_definitions, model_config={"extra": "forbid"}
+            "AllOfModel",
+            __config__=ConfigDict(extra="forbid"),
+            **field_definitions,
         )
 
     def handle_any_of(
@@ -177,7 +186,7 @@ class CombinerHandler(ICombinerHandler):
                 model_name = f"Variant_{type_const}"
 
             variant_model = create_model(
-                model_name, **fields, model_config={"extra": "forbid"}
+                model_name, __config__=ConfigDict(extra="forbid"), **fields
             )
             variant_models[type_const] = variant_model
 

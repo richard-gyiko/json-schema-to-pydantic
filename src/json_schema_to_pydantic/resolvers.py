@@ -98,6 +98,9 @@ class TypeResolver(ITypeResolver):
             }
             return format_map.get(format_type, str)
 
+        if schema_type == "anyType":
+            return Any
+
         type_map = {
             "string": str,
             "integer": int,

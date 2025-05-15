@@ -18,7 +18,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "0.5.13"
+          version: "0.7.3"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
@@ -26,7 +26,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --frozen --all-extras --dev
 
       - name: Run tests
         run: uv run pytest --cov --junitxml=junit.xml -o junit_family=legacy
@@ -43,4 +43,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run linters
-        run: uv run ruff check .
+        run: uvx ruff check .
