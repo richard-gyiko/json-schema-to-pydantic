@@ -395,6 +395,7 @@ def test_type_resolver_complex_nested_references():
     assert instance.items[1]["nested_items"][0]["value"] == 30
     assert instance.description == "A complex nested structure"
 
+
 def test_type_resolver_anytype():
     """Test handling of anyType."""
     resolver = TypeResolver()
@@ -412,5 +413,7 @@ def test_type_resolver_anytype():
 
     # Test ["anyType", "null"] (order shouldn't matter)
     schema_optional_any_reversed = {"type": ["anyType", "null"]}
-    result_optional_any_reversed = resolver.resolve_type(schema_optional_any_reversed, {})
+    result_optional_any_reversed = resolver.resolve_type(
+        schema_optional_any_reversed, {}
+    )
     assert result_optional_any_reversed == Optional[Any]
