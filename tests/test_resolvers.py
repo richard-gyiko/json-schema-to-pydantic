@@ -394,3 +394,23 @@ def test_type_resolver_complex_nested_references():
     assert instance.items[1]["nested_items"][0]["name"] == "nested3"
     assert instance.items[1]["nested_items"][0]["value"] == 30
     assert instance.description == "A complex nested structure"
+
+def test_type_resolver_anytype():
+    """Test handling of anyType."""
+    resolver = TypeResolver()
+    from typing import Any, Optional
+
+    # Test "anyType"
+    schema_any = {"type": "anyType"}
+    result_any = resolver.resolve_type(schema_any, {})
+    assert result_any is Any
+
+    # Test ["null", "anyType"]
+    schema_optional_any = {"type": ["null", "anyType"]}
+    result_optional_any = resolver.resolve_type(schema_optional_any, {})
+    assert result_optional_any == Optional[Any]
+
+    # Test ["anyType", "null"] (order shouldn't matter)
+    schema_optional_any_reversed = {"type": ["anyType", "null"]}
+    result_optional_any_reversed = resolver.resolve_type(schema_optional_any_reversed, {})
+    assert result_optional_any_reversed == Optional[Any]
