@@ -43,4 +43,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run linters
-        run: uv run ruff check .
+        run: uvx ruff check .
