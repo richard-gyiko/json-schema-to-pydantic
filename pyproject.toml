@@ -46,7 +46,4 @@ build-backend = "hatchling.build"
 source = "uv-dynamic-versioning"
 
 [tool.uv-dynamic-versioning]
-vcs = "git"
-style = "pep440"
-bump = true
 fallback-version = "0.0.0"
