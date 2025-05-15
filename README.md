@@ -3,6 +3,7 @@
 A Python library for automatically generating Pydantic v2 models from JSON Schema definitions.
 
 ![PyPI - Version](https://img.shields.io/pypi/v/json-schema-to-pydantic)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/json-schema-to-pydantic?logo=pypi)
 [![codecov](https://codecov.io/github/richard-gyiko/json-schema-to-pydantic/graph/badge.svg?token=YA2Y769H1K)](https://codecov.io/github/richard-gyiko/json-schema-to-pydantic)
 
 ## Features
