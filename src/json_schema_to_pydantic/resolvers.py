@@ -25,11 +25,11 @@ class TypeResolver(ITypeResolver):
 
         if "const" in schema:
             if schema["const"] is None:
-                return Optional[Any]
+                return type(None)
             return Literal[schema["const"]]
 
         if schema.get("type") == "null":
-            return Optional[Any]
+            return type(None)
 
         # Handle array of types (e.g. ["string", "null"])
         if isinstance(schema.get("type"), list):
