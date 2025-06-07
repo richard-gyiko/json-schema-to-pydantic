@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any, Dict, Literal
 from uuid import UUID
 
@@ -34,6 +34,10 @@ class ConstraintBuilder(IConstraintBuilder):
                 return constraints
             elif format_type == "date-time":
                 return datetime
+            elif format_type == "date":
+                return date
+            elif format_type == "time":
+                return time
             elif format_type == "uri":
                 return AnyUrl
             elif format_type == "uuid":

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any, List, Literal, Optional, Set
 from uuid import UUID
 
@@ -92,6 +92,8 @@ class TypeResolver(ITypeResolver):
             format_type = schema["format"]
             format_map = {
                 "date-time": datetime,
+                "date": date,
+                "time": time,
                 "email": str,
                 "uri": AnyUrl,
                 "uuid": UUID,
