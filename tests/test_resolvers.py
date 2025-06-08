@@ -147,7 +147,7 @@ def test_type_resolver_complex_types():
 def test_type_resolver_format_handling():
     """Test handling of format specifications."""
     resolver = TypeResolver()
-    from datetime import datetime
+    from datetime import datetime, date, time
     from uuid import UUID
 
     from pydantic import AnyUrl
@@ -155,6 +155,8 @@ def test_type_resolver_format_handling():
     assert (
         resolver.resolve_type({"type": "string", "format": "date-time"}, {}) == datetime
     )
+    assert resolver.resolve_type({"type": "string", "format": "date"}, {}) == date
+    assert resolver.resolve_type({"type": "string", "format": "time"}, {}) == time
     assert resolver.resolve_type({"type": "string", "format": "email"}, {}) is str
     assert resolver.resolve_type({"type": "string", "format": "uri"}, {}) == AnyUrl
     assert resolver.resolve_type({"type": "string", "format": "uuid"}, {}) == UUID
