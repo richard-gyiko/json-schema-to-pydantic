@@ -184,7 +184,7 @@ def test_type_resolver_const():
     # Test null const
     schema = {"const": None}
     result = resolver.resolve_type(schema, {})
-    assert result == Optional[Any]
+    assert result == type(None)
 
 
 def test_type_resolver_null():
@@ -194,7 +194,7 @@ def test_type_resolver_null():
 
     schema = {"type": "null"}
     result = resolver.resolve_type(schema, {})
-    assert result == Optional[Any]
+    assert result == type(None)
 
     # Test nullable string
     schema = {"type": ["string", "null"]}
