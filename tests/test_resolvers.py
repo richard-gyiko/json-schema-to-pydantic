@@ -175,7 +175,7 @@ def test_type_resolver_enum():
 def test_type_resolver_const():
     """Test handling of const values."""
     resolver = TypeResolver()
-    from typing import Any, Literal, Optional
+    from typing import Literal
 
     schema = {"const": 42}
     result = resolver.resolve_type(schema, {})
@@ -184,17 +184,17 @@ def test_type_resolver_const():
     # Test null const
     schema = {"const": None}
     result = resolver.resolve_type(schema, {})
-    assert result == Optional[Any]
+    assert result is type(None)
 
 
 def test_type_resolver_null():
     """Test handling of null type."""
     resolver = TypeResolver()
-    from typing import Any, Optional
+    from typing import Optional
 
     schema = {"type": "null"}
     result = resolver.resolve_type(schema, {})
-    assert result == Optional[Any]
+    assert result is type(None)
 
     # Test nullable string
     schema = {"type": ["string", "null"]}
