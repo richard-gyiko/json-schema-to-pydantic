@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Set, Type, TypeVar
 
 from pydantic import BaseModel, Field, create_model
 
@@ -116,6 +116,26 @@ class PydanticModelBuilder(IModelBuilder[T]):
             return self.combiner_handler.handle_one_of(
                 field_schema, root_schema, allow_undefined_array_items
             )
+
+        # Handle arrays by recursively processing items
+        if field_schema.get("type") == "array":
+            items_schema = field_schema.get("items")
+            if not items_schema:
+                if allow_undefined_array_items:
+                    return List[Any]
+                else:
+                    from .exceptions import TypeError
+                    raise TypeError("Array type must specify 'items' schema")
+
+            # Recursively process the items schema through the model builder
+            # This ensures that object types get proper models created
+            item_type = self._get_field_type(
+                items_schema, root_schema, allow_undefined_array_items
+            )
+            
+            if field_schema.get("uniqueItems", False):
+                return Set[item_type]
+            return List[item_type]
 
         # Handle nested objects by recursively creating models
         if field_schema.get("type") == "object" and "properties" in field_schema:

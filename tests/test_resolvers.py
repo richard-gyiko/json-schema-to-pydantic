@@ -311,9 +311,9 @@ def test_type_resolver_nested_array_references():
 
     model = create_model(root_schema)
     instance = model.model_validate({"a": [{"b": 1}, {"b": 2}]})
-    # Access as dictionary items since they're dictionaries, not models
-    assert instance.a[0]["b"] == 1
-    assert instance.a[1]["b"] == 2
+    # Access as Pydantic models
+    assert instance.a[0].b == 1
+    assert instance.a[1].b == 2
 
 
 def test_type_resolver_complex_nested_references():
@@ -387,14 +387,14 @@ def test_type_resolver_complex_nested_references():
     )
 
     # Verify the structure was correctly parsed
-    # Access as dictionary items since they're dictionaries, not models
-    assert instance.items[0]["id"] == "item1"
-    assert instance.items[0]["nested_items"][0]["name"] == "nested1"
-    assert instance.items[0]["nested_items"][0]["value"] == 10
-    assert instance.items[0]["metadata"]["key1"] == "value1"
-    assert instance.items[1]["id"] == "item2"
-    assert instance.items[1]["nested_items"][0]["name"] == "nested3"
-    assert instance.items[1]["nested_items"][0]["value"] == 30
+    # Access as Pydantic models (our fix now creates proper models)
+    assert instance.items[0].id == "item1"
+    assert instance.items[0].nested_items[0].name == "nested1"
+    assert instance.items[0].nested_items[0].value == 10
+    assert instance.items[0].metadata["key1"] == "value1"  # metadata is still dict due to additionalProperties
+    assert instance.items[1].id == "item2"
+    assert instance.items[1].nested_items[0].name == "nested3"
+    assert instance.items[1].nested_items[0].value == 30
     assert instance.description == "A complex nested structure"
 
 

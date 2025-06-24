@@ -220,10 +220,10 @@ def test_complex_schema_with_undefined_arrays():
     assert instance.tags == ["important", "urgent"]
     assert instance.metadata.categories == ["A", "B", "C"]
     assert instance.metadata.flags == [True, False, True]
-    # Access history items as dictionaries since they might not be converted to models
-    assert instance.history[0]["timestamp"] == "2023-01-01"
-    assert instance.history[0]["actions"] == ["created", "modified"]
-    assert instance.history[1]["actions"] == ["reviewed", 123, {"status": "approved"}]
+    # Access history items as Pydantic models
+    assert instance.history[0].timestamp == "2023-01-01"
+    assert instance.history[0].actions == ["created", "modified"]
+    assert instance.history[1].actions == ["reviewed", 123, {"status": "approved"}]
 
 
 def test_root_level_features():
