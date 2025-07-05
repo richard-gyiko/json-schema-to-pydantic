@@ -296,3 +296,106 @@ def test_create_model_function():
     model = create_model(schema, allow_undefined_array_items=True)
     instance = model(tools=["hammer", "screwdriver"])
     assert instance.tools == ["hammer", "screwdriver"]
+
+
+def test_json_schema_extra_support():
+    """Test json_schema_extra support for both models and fields."""
+    builder = PydanticModelBuilder()
+    
+    # Test field-level json_schema_extra
+    field_schema = {
+        "title": "FieldTestModel",
+        "type": "object",
+        "properties": {
+            "field_with_extra": {
+                "type": "string",
+                "description": "A field with extra properties",
+                "is_core_field": True,
+                "custom_validation": "email",
+                "ui_hint": "large_text"
+            },
+            "normal_field": {
+                "type": "integer", 
+                "description": "A normal field"
+            }
+        },
+        "required": ["field_with_extra"]
+    }
+    
+    model = builder.create_pydantic_model(field_schema)
+    
+    # Check field with json_schema_extra
+    field_info = model.model_fields["field_with_extra"]
+    assert field_info.json_schema_extra == {
+        "is_core_field": True,
+        "custom_validation": "email", 
+        "ui_hint": "large_text"
+    }
+    assert field_info.description == "A field with extra properties"
+    
+    # Check normal field has no json_schema_extra
+    normal_field_info = model.model_fields["normal_field"]
+    assert normal_field_info.json_schema_extra is None
+    assert normal_field_info.description == "A normal field"
+    
+    # Test model-level json_schema_extra
+    model_schema = {
+        "title": "ModelTestModel",
+        "type": "object", 
+        "description": "A model with extra properties",
+        "properties": {
+            "field": {"type": "string"}
+        },
+        "examples": [{"field": "example_value"}],
+        "ui_config": {"theme": "dark"},
+        "version": "1.0.0"
+    }
+    
+    model_with_extra = builder.create_pydantic_model(model_schema)
+    generated_schema = model_with_extra.model_json_schema()
+    
+    # Check model-level json_schema_extra is preserved
+    assert "examples" in generated_schema
+    assert generated_schema["examples"] == [{"field": "example_value"}]
+    assert "ui_config" in generated_schema
+    assert generated_schema["ui_config"] == {"theme": "dark"}
+    assert "version" in generated_schema
+    assert generated_schema["version"] == "1.0.0"
+    
+    # Standard properties should still be present
+    assert generated_schema["title"] == "ModelTestModel"
+    assert generated_schema["type"] == "object"
+    assert "properties" in generated_schema
+    
+    # Test roundtrip: create model from generated schema
+    roundtrip_model = builder.create_pydantic_model(generated_schema)
+    roundtrip_schema = roundtrip_model.model_json_schema()
+    
+    # Should be identical
+    assert roundtrip_schema == generated_schema
+
+
+def test_json_schema_extra_with_user_example():
+    """Test the exact user example from the issue."""
+    from pydantic import BaseModel, Field, ConfigDict
+    
+    # Original model as user defined
+    class A(BaseModel):
+        v: int = Field(..., description="This is a field", is_core_field=True)
+        model_config = ConfigDict(json_schema_extra={'examples': [{'a': 'Foo'}]})
+    
+    # Get schema and reconstruct
+    schema = A.model_json_schema()
+    builder = PydanticModelBuilder()
+    A_recon = builder.create_pydantic_model(schema)
+    
+    # Check that everything matches
+    original_schema = A.model_json_schema()
+    reconstructed_schema = A_recon.model_json_schema()
+    
+    assert original_schema == reconstructed_schema
+    assert A.model_fields['v'].json_schema_extra == A_recon.model_fields['v'].json_schema_extra
+    
+    # Test model functionality
+    instance = A_recon(v=42)
+    assert instance.v == 42

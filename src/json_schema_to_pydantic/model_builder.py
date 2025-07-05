@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Set, Type, TypeVar
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, ConfigDict
 
 from .builders import ConstraintBuilder
 from .handlers import CombinerHandler
@@ -12,6 +12,25 @@ T = TypeVar("T", bound=BaseModel)
 
 class PydanticModelBuilder(IModelBuilder[T]):
     """Creates Pydantic models from JSON Schema definitions"""
+
+    # Standard JSON Schema properties for fields
+    STANDARD_FIELD_PROPERTIES = {
+        "type", "format", "description", "default", "title", "examples",
+        "const", "enum", "multipleOf", "maximum", "exclusiveMaximum", 
+        "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern",
+        "items", "additionalItems", "maxItems", "minItems", "uniqueItems",
+        "properties", "additionalProperties", "required", "patternProperties",
+        "dependencies", "propertyNames", "if", "then", "else", "allOf", 
+        "anyOf", "oneOf", "not", "$ref", "$defs", "definitions"
+    }
+    
+    # Standard JSON Schema properties for models  
+    STANDARD_MODEL_PROPERTIES = {
+        "type", "title", "description", "properties", "required", "additionalProperties",
+        "patternProperties", "dependencies", "propertyNames", "if", "then", "else",
+        "allOf", "anyOf", "oneOf", "not", "$ref", "$defs", "definitions", "$schema", 
+        "$id", "$comment"
+    }
 
     def __init__(self, base_model_type: Type[T] = BaseModel):
         # Instantiate resolvers and builders directly
@@ -75,6 +94,12 @@ class PydanticModelBuilder(IModelBuilder[T]):
         properties = schema.get("properties", {})
         required = schema.get("required", [])
 
+        # Extract model-level json_schema_extra
+        model_extra = {
+            key: value for key, value in schema.items()
+            if key not in self.STANDARD_MODEL_PROPERTIES
+        }
+
         # Build field definitions
         fields = {}
         for field_name, field_schema in properties.items():
@@ -84,8 +109,16 @@ class PydanticModelBuilder(IModelBuilder[T]):
             field_info = self._build_field_info(field_schema, field_name in required)
             fields[field_name] = (field_type, field_info)
 
-        # Create the model
-        model = create_model(title, __base__=self.base_model_type, **fields)
+        # Create the model with or without json_schema_extra
+        if model_extra:
+            # Create a dynamic base class with the config
+            class DynamicBase(self.base_model_type):
+                model_config = ConfigDict(json_schema_extra=model_extra)
+            
+            model = create_model(title, __base__=DynamicBase, **fields)
+        else:
+            model = create_model(title, __base__=self.base_model_type, **fields)
+            
         if description:
             model.__doc__ = description
 
@@ -169,5 +202,14 @@ class PydanticModelBuilder(IModelBuilder[T]):
             field_kwargs["default"] = field_schema["default"]
         elif not required:
             field_kwargs["default"] = None
+
+        # Extract field-level json_schema_extra
+        field_extra = {
+            key: value for key, value in field_schema.items()
+            if key not in self.STANDARD_FIELD_PROPERTIES
+        }
+        
+        if field_extra:
+            field_kwargs["json_schema_extra"] = field_extra
 
         return Field(**field_kwargs)
