@@ -33,7 +33,6 @@ def test_type_resolver_optional_array():
     schema = {"type": ["array", "null"], "items": {"type": "string"}}
     from typing import List, Optional
 
-    print(resolver.resolve_type(schema, {}))
     assert resolver.resolve_type(schema, {}) == Optional[List[str]]
 
 
