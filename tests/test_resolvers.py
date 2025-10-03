@@ -103,14 +103,12 @@ def test_nested_reference_resolution():
 
 
 def test_circular_reference_detection():
-    """Test detection of circular references."""
+    """Test detection of direct circular references (ref to itself)."""
     resolver = ReferenceResolver()
     root_schema = {
         "definitions": {
-            "person": {
-                "type": "object",
-                "properties": {"friend": {"$ref": "#/definitions/person"}},
-            }
+            # This is a direct circular reference where a definition references itself directly
+            "person": {"$ref": "#/definitions/person"}
         }
     }
 
@@ -210,6 +208,30 @@ def test_type_resolver_null():
     assert result == Optional[str]
 
 
+def test_recursive_reference_not_detected_in_properties():
+    """Test that recursive references in properties are NOT detected as circular.
+    
+    This is intentional - the model builder handles recursive references properly
+    using forward references, so the resolver should not eagerly resolve refs in properties.
+    """
+    resolver = ReferenceResolver()
+    root_schema = {
+        "definitions": {
+            "person": {
+                "type": "object",
+                "properties": {"friend": {"$ref": "#/definitions/person"}},
+            }
+        }
+    }
+
+    # This should NOT raise an error - the reference is preserved for the model builder to handle
+    result = resolver.resolve_ref("#/definitions/person", {}, root_schema)
+    assert result["type"] == "object"
+    assert "friend" in result["properties"]
+    # The friend property should still have the $ref
+    assert result["properties"]["friend"]["$ref"] == "#/definitions/person"
+
+
 def test_reference_resolver_nested_definitions():
     """Test resolution of nested definitions."""
     resolver = ReferenceResolver()
@@ -236,7 +258,8 @@ def test_reference_resolver_nested_definitions():
     result = resolver.resolve_ref("#/definitions/shape", {}, root_schema)
     assert result["type"] == "object"
     assert "name" in result["properties"]
-    assert result["properties"]["size"] == root_schema["definitions"]["size"]
+    # The size property should still have the $ref - it's not eagerly resolved
+    assert result["properties"]["size"]["$ref"] == "#/definitions/size"
 
 
 def test_reference_resolver_array_refs():

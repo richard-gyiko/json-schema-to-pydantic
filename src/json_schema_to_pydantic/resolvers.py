@@ -144,18 +144,8 @@ class ReferenceResolver(IReferenceResolver):
                     raise ReferenceError(f"Invalid reference path: {ref}")
 
             # If we find another reference, resolve it
-            if isinstance(current, dict):
-                if "$ref" in current:
-                    current = self.resolve_ref(current["$ref"], current, root_schema)
-                elif "properties" in current:
-                    # Check properties for references
-                    properties = current["properties"]
-                    for prop_name, prop_schema in properties.items():
-                        if isinstance(prop_schema, dict) and "$ref" in prop_schema:
-                            # This will trigger circular reference detection if needed
-                            properties[prop_name] = self.resolve_ref(
-                                prop_schema["$ref"], prop_schema, root_schema
-                            )
+            if isinstance(current, dict) and "$ref" in current:
+                current = self.resolve_ref(current["$ref"], current, root_schema)
 
             return current
         finally:
