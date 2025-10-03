@@ -1,7 +1,4 @@
 """Tests for recursive model handling."""
-import pytest
-from pydantic import BaseModel
-
 from json_schema_to_pydantic.model_builder import PydanticModelBuilder
 
 
