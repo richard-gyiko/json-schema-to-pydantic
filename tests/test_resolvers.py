@@ -27,6 +27,14 @@ def test_type_resolver_array():
 
     assert resolver.resolve_type(schema, {}) == List[str]
 
+def test_type_resolver_optional_array():
+    resolver = TypeResolver()
+
+    schema = {"type": ["array", "null"], "items": {"type": "string"}}
+    from typing import List, Optional
+
+    assert resolver.resolve_type(schema, {}) == Optional[List[str]]
+
 
 def test_type_resolver_undefined_array_items():
     """Test handling of arrays without defined item types."""

@@ -39,7 +39,7 @@ class TypeResolver(ITypeResolver):
                 if len(other_types) == 1:
                     return Optional[
                         self.resolve_type(
-                            schema={"type": other_types[0]},
+                            schema={**schema, **{"type": other_types[0]}},
                             root_schema=root_schema,
                             allow_undefined_array_items=allow_undefined_array_items,
                         )
