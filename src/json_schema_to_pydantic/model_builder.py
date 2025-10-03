@@ -46,12 +46,17 @@ class PydanticModelBuilder(IModelBuilder[T]):
             field_info_builder=self._build_field_info,
         )
         self.base_model_type = base_model_type
+        # Track models being built to handle recursive references
+        self._model_cache: Dict[str, Type[BaseModel]] = {}
+        self._building_models: Set[str] = set()
+        self._models_to_rebuild: Set[Type[BaseModel]] = set()
 
     def create_pydantic_model(
         self,
         schema: Dict[str, Any],
         root_schema: Optional[Dict[str, Any]] = None,
         allow_undefined_array_items: bool = False,
+        _schema_ref: Optional[str] = None,
     ) -> Type[T]:
         """
         Creates a Pydantic model from a JSON Schema definition.
@@ -66,8 +71,20 @@ class PydanticModelBuilder(IModelBuilder[T]):
         if root_schema is None:
             root_schema = schema
 
+        # Store the original ref if present for tracking
+        # Use the passed ref or extract from schema
+        original_ref = _schema_ref or schema.get("$ref")
+        
         # Handle references
         if "$ref" in schema:
+            # Check if we've already built this model
+            if original_ref in self._model_cache:
+                return self._model_cache[original_ref]
+            
+            # Mark this ref as being built
+            if original_ref:
+                self._building_models.add(original_ref)
+            
             schema = self.reference_resolver.resolve_ref(
                 schema["$ref"],
                 schema,
@@ -89,7 +106,12 @@ class PydanticModelBuilder(IModelBuilder[T]):
             )
 
         # Get model properties
-        title = schema.get("title", "DynamicModel")
+        # If this schema is referenced, use the ref name as the title if no title is provided
+        if original_ref and "title" not in schema:
+            ref_parts = original_ref.split("/")
+            title = ref_parts[-1] if ref_parts else "DynamicModel"
+        else:
+            title = schema.get("title", "DynamicModel")
         description = schema.get("description")
         properties = schema.get("properties", {})
         required = schema.get("required", [])
@@ -122,6 +144,24 @@ class PydanticModelBuilder(IModelBuilder[T]):
         if description:
             model.__doc__ = description
 
+        # Cache the model if it was referenced
+        if original_ref:
+            self._model_cache[original_ref] = model
+            # Remove from building set
+            self._building_models.discard(original_ref)
+            # Mark model for rebuild after all models are created
+            self._models_to_rebuild.add(model)
+
+        # If this is the top-level call (no models being built), rebuild all models
+        if not self._building_models and self._models_to_rebuild:
+            # Build namespace with all models
+            namespace = {m.__name__: m for m in self._models_to_rebuild}
+            # Rebuild all models to resolve forward references
+            for m in self._models_to_rebuild:
+                m.model_rebuild(_types_namespace=namespace)
+            # Clear the rebuild set
+            self._models_to_rebuild.clear()
+
         return model
 
     def _get_field_type(
@@ -131,7 +171,28 @@ class PydanticModelBuilder(IModelBuilder[T]):
         allow_undefined_array_items: bool = False,
     ) -> Any:
         """Resolves the Python type for a field schema."""
+        # Store the original ref if present
+        original_ref = field_schema.get("$ref")
+        
         if "$ref" in field_schema:
+            # Check if this reference is already being built (recursive reference)
+            if original_ref in self._building_models:
+                # Return cached model if available
+                if original_ref in self._model_cache:
+                    return self._model_cache[original_ref]
+                # Otherwise, return a forward reference (string)
+                # Extract model name from ref
+                ref_parts = original_ref.split("/")
+                model_name = ref_parts[-1] if ref_parts else "DynamicModel"
+                return model_name
+            
+            # Check if we've already built this model
+            if original_ref in self._model_cache:
+                return self._model_cache[original_ref]
+            
+            # Mark this ref as being built before resolving
+            self._building_models.add(original_ref)
+            
             field_schema = self.reference_resolver.resolve_ref(
                 field_schema["$ref"], field_schema, root_schema
             )
@@ -172,9 +233,20 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         # Handle nested objects by recursively creating models
         if field_schema.get("type") == "object" and "properties" in field_schema:
-            return self.create_pydantic_model(
-                field_schema, root_schema, allow_undefined_array_items
+            # Build the model and cache/cleanup if we tracked this ref
+            # Pass the original ref so the model can be named correctly
+            model = self.create_pydantic_model(
+                field_schema, root_schema, allow_undefined_array_items, _schema_ref=original_ref
             )
+            
+            # If we were tracking a ref for this field, cache and cleanup
+            if original_ref and original_ref in self._building_models:
+                self._model_cache[original_ref] = model
+                self._building_models.discard(original_ref)
+                # Mark model for rebuild after all models are created
+                self._models_to_rebuild.add(model)
+            
+            return model
 
         return self.type_resolver.resolve_type(
             schema=field_schema,
