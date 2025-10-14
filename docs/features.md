@@ -11,6 +11,41 @@ This document outlines the JSON Schema features supported by the library.
 - `array`: Maps to Python `List`
 - `object`: Maps to Pydantic model
 
+### Multiple Types
+
+JSON Schema allows specifying multiple types for a field using an array. The library handles these cases:
+
+- Single type with `null`: Maps to `Optional[Type]`
+  ```json
+  {"type": ["string", "null"]}  // → Optional[str]
+  ```
+
+- Multiple types without `null`: Maps to `Union[Type1, Type2, ...]`
+  ```json
+  {"type": ["string", "integer"]}  // → Union[str, int]
+  ```
+
+- Multiple types with `null`: Maps to `Optional[Union[Type1, Type2, ...]]`
+  ```json
+  {"type": ["string", "integer", "null"]}  // → Optional[Union[str, int]]
+  ```
+
+Example with complex types:
+```json
+{
+    "type": "object",
+    "properties": {
+        "flexible_field": {
+            "type": ["string", "integer", "boolean"]
+        },
+        "optional_flexible": {
+            "type": ["array", "string", "null"],
+            "items": {"type": "integer"}
+        }
+    }
+}
+```
+
 ## String Formats
 
 Supported formats with their Python types:

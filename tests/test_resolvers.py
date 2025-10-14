@@ -503,3 +503,18 @@ def test_type_resolver_multiple_complex_types():
     schema = {"type": ["array", "string", "null"], "items": {"type": "integer"}}
     result = resolver.resolve_type(schema, {})
     assert result == Optional[Union[List[int], str]]
+
+
+def test_type_resolver_edge_cases():
+    """Test edge cases with type arrays."""
+    resolver = TypeResolver()
+
+    # Test single type in array (unusual but valid)
+    schema = {"type": ["string"]}
+    result = resolver.resolve_type(schema, {})
+    assert result is str
+
+    # Test only null in array (unusual but valid)
+    schema = {"type": ["null"]}
+    result = resolver.resolve_type(schema, {})
+    assert result is type(None)

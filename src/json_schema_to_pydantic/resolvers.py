@@ -36,7 +36,10 @@ class TypeResolver(ITypeResolver):
             types = schema["type"]
             if "null" in types:
                 other_types = [t for t in types if t != "null"]
-                if len(other_types) == 1:
+                if len(other_types) == 0:
+                    # Only null: {"type": ["null"]}
+                    return type(None)
+                elif len(other_types) == 1:
                     return Optional[
                         self.resolve_type(
                             schema={**schema, **{"type": other_types[0]}},
@@ -44,7 +47,7 @@ class TypeResolver(ITypeResolver):
                             allow_undefined_array_items=allow_undefined_array_items,
                         )
                     ]
-                elif len(other_types) > 1:
+                else:
                     # Multiple types with null: Union[type1, type2, ...] | None
                     resolved_types = [
                         self.resolve_type(
@@ -56,8 +59,16 @@ class TypeResolver(ITypeResolver):
                     ]
                     return Optional[Union[tuple(resolved_types)]]
             else:
-                # Multiple types without null: Union[type1, type2, ...]
-                if len(types) > 1:
+                # No null in types
+                if len(types) == 1:
+                    # Single type in array: {"type": ["string"]}
+                    return self.resolve_type(
+                        schema={**schema, **{"type": types[0]}},
+                        root_schema=root_schema,
+                        allow_undefined_array_items=allow_undefined_array_items,
+                    )
+                else:
+                    # Multiple types without null: Union[type1, type2, ...]
                     resolved_types = [
                         self.resolve_type(
                             schema={**schema, **{"type": t}},
@@ -67,7 +78,6 @@ class TypeResolver(ITypeResolver):
                         for t in types
                     ]
                     return Union[tuple(resolved_types)]
-            raise TypeError("Unsupported type combination")
 
         if "enum" in schema:
             if not schema["enum"]:
