@@ -1,5 +1,5 @@
 from datetime import date, datetime, time
-from typing import Any, List, Literal, Optional, Set
+from typing import Any, List, Literal, Optional, Set, Union
 from uuid import UUID
 
 from pydantic import AnyUrl
@@ -44,6 +44,29 @@ class TypeResolver(ITypeResolver):
                             allow_undefined_array_items=allow_undefined_array_items,
                         )
                     ]
+                elif len(other_types) > 1:
+                    # Multiple types with null: Union[type1, type2, ...] | None
+                    resolved_types = [
+                        self.resolve_type(
+                            schema={**schema, **{"type": t}},
+                            root_schema=root_schema,
+                            allow_undefined_array_items=allow_undefined_array_items,
+                        )
+                        for t in other_types
+                    ]
+                    return Optional[Union[tuple(resolved_types)]]
+            else:
+                # Multiple types without null: Union[type1, type2, ...]
+                if len(types) > 1:
+                    resolved_types = [
+                        self.resolve_type(
+                            schema={**schema, **{"type": t}},
+                            root_schema=root_schema,
+                            allow_undefined_array_items=allow_undefined_array_items,
+                        )
+                        for t in types
+                    ]
+                    return Union[tuple(resolved_types)]
             raise TypeError("Unsupported type combination")
 
         if "enum" in schema:

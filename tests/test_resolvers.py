@@ -450,3 +450,56 @@ def test_type_resolver_anytype():
         schema_optional_any_reversed, {}
     )
     assert result_optional_any_reversed == Optional[Any]
+
+
+def test_type_resolver_multiple_types_without_null():
+    """Test handling of multiple types without null (Union)."""
+    resolver = TypeResolver()
+    from typing import Union
+
+    # Test ["string", "integer"]
+    schema = {"type": ["string", "integer"]}
+    result = resolver.resolve_type(schema, {})
+    assert result == Union[str, int]
+
+    # Test ["string", "number", "boolean"]
+    schema = {"type": ["string", "number", "boolean"]}
+    result = resolver.resolve_type(schema, {})
+    assert result == Union[str, float, bool]
+
+
+def test_type_resolver_multiple_types_with_null():
+    """Test handling of multiple types with null (Optional[Union])."""
+    resolver = TypeResolver()
+    from typing import Optional, Union
+
+    # Test ["string", "integer", "null"]
+    schema = {"type": ["string", "integer", "null"]}
+    result = resolver.resolve_type(schema, {})
+    assert result == Optional[Union[str, int]]
+
+    # Test ["string", "number", "boolean", "null"]
+    schema = {"type": ["string", "number", "boolean", "null"]}
+    result = resolver.resolve_type(schema, {})
+    assert result == Optional[Union[str, float, bool]]
+
+    # Test order shouldn't matter
+    schema = {"type": ["null", "string", "integer"]}
+    result = resolver.resolve_type(schema, {})
+    assert result == Optional[Union[str, int]]
+
+
+def test_type_resolver_multiple_complex_types():
+    """Test handling of multiple complex types."""
+    resolver = TypeResolver()
+    from typing import List, Optional, Union
+
+    # Test ["array", "string"] - array or string
+    schema = {"type": ["array", "string"], "items": {"type": "integer"}}
+    result = resolver.resolve_type(schema, {})
+    assert result == Union[List[int], str]
+
+    # Test ["array", "string", "null"] - optional array or string
+    schema = {"type": ["array", "string", "null"], "items": {"type": "integer"}}
+    result = resolver.resolve_type(schema, {})
+    assert result == Optional[Union[List[int], str]]
