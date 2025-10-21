@@ -57,7 +57,7 @@ class TypeResolver(ITypeResolver):
                         )
                         for t in other_types
                     ]
-                    return Optional[Union[tuple(resolved_types)]]
+                    return Optional[Union[*resolved_types]]
             else:
                 # No null in types
                 if len(types) == 1:
@@ -77,7 +77,7 @@ class TypeResolver(ITypeResolver):
                         )
                         for t in types
                     ]
-                    return Union[tuple(resolved_types)]
+                    return Union[*resolved_types]
 
         if "enum" in schema:
             if not schema["enum"]:
