@@ -22,7 +22,7 @@ urls.Homepage = "https://github.com/richard-gyiko/json-schema-to-pydantic"
 urls.Bug-Tracker = "https://github.com/richard-gyiko/json-schema-to-pydantic/issues"
 urls.Documentation = "https://github.com/richard-gyiko/json-schema-to-pydantic#readme"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "pydantic>=2.10.4",
 ]
