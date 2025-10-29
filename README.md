@@ -68,12 +68,22 @@ user = UserModel(
     age=30
 )
 
-# Example with relaxed array item validation
+# Example with relaxed validation
 RelaxedModel = create_model(
-    {"type": "object", "properties": {"tags": {"type": "array"}}},
-    allow_undefined_array_items=True
+    {
+        "type": "object",
+        "properties": {
+            "tags": {"type": "array"},  # Array without items schema
+            "metadata": {}  # Field without type
+        }
+    },
+    allow_undefined_array_items=True,  # Allows arrays without items schema
+    allow_undefined_type=True  # Allows fields without type (defaults to Any)
 )
-relaxed_instance = RelaxedModel(tags=[1, "two", True])
+relaxed_instance = RelaxedModel(
+    tags=[1, "two", True],
+    metadata={"custom": "data"}
+)
 ```
 
 ## Advanced Usage

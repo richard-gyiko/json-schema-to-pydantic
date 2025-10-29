@@ -280,6 +280,30 @@ def test_undefined_array_items():
     assert instance.tags == [1, "two", 3.0, True]
 
 
+def test_undefined_type():
+    """Test handling of schemas without an explicit type."""
+    # Test with default behavior (should raise error)
+    builder = PydanticModelBuilder()
+    schema = {"type": "object", "properties": {"metadata": {"description": "Any metadata"}}}
+
+    # Use the explicit alias in pytest.raises
+    with pytest.raises(
+        JsonSchemaTypeError, match="Schema must specify a type. Set allow_undefined_type=True"
+    ):
+        builder.create_pydantic_model(schema)
+
+    # Test with allow_undefined_type=True
+    model = builder.create_pydantic_model(schema, allow_undefined_type=True)
+
+    # Should create a model with Any field
+    instance = model(metadata={"key": "value"})
+    assert instance.metadata == {"key": "value"}
+
+    # Should accept any type
+    instance = model(metadata=[1, "two", 3.0, True])
+    assert instance.metadata == [1, "two", 3.0, True]
+
+
 def test_create_model_function():
     """Test the create_model function from the package."""
     from json_schema_to_pydantic import create_model
