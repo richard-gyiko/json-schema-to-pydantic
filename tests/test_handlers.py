@@ -19,7 +19,7 @@ def create_handler():
     # Define simple callbacks for testing purposes
     # Note: These might need adjustment if tests require full model building recursion
     def simple_recursive_builder(
-        schema, root_schema, allow_undefined_array_items=False
+        schema, root_schema, allow_undefined_array_items=False, allow_any_type=False
     ):
         # Resolve $ref first, similar to PydanticModelBuilder._get_field_type
         if "$ref" in schema:

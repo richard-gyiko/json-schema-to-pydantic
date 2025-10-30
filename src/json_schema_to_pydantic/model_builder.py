@@ -56,6 +56,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         schema: Dict[str, Any],
         root_schema: Optional[Dict[str, Any]] = None,
         allow_undefined_array_items: bool = False,
+        allow_undefined_type: bool = False,
         _schema_ref: Optional[str] = None,
     ) -> Type[T]:
         """
@@ -94,15 +95,15 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle combiners
         if "allOf" in schema:
             return self.combiner_handler.handle_all_of(
-                schema["allOf"], root_schema, allow_undefined_array_items
+                schema["allOf"], root_schema, allow_undefined_array_items, allow_undefined_type
             )
         if "anyOf" in schema:
             return self.combiner_handler.handle_any_of(
-                schema["anyOf"], root_schema, allow_undefined_array_items
+                schema["anyOf"], root_schema, allow_undefined_array_items, allow_undefined_type
             )
         if "oneOf" in schema:
             return self.combiner_handler.handle_one_of(
-                schema["oneOf"], root_schema, allow_undefined_array_items
+                schema["oneOf"], root_schema, allow_undefined_array_items, allow_undefined_type
             )
 
         # Get model properties
@@ -126,7 +127,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         fields = {}
         for field_name, field_schema in properties.items():
             field_type = self._get_field_type(
-                field_schema, root_schema, allow_undefined_array_items
+                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type
             )
             field_info = self._build_field_info(field_schema, field_name in required)
             fields[field_name] = (field_type, field_info)
@@ -169,6 +170,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         field_schema: Dict[str, Any],
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
+        allow_undefined_type: bool = False,
     ) -> Any:
         """Resolves the Python type for a field schema."""
         # Store the original ref if present
@@ -200,15 +202,15 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle combiners
         if "allOf" in field_schema:
             return self.combiner_handler.handle_all_of(
-                field_schema["allOf"], root_schema, allow_undefined_array_items
+                field_schema["allOf"], root_schema, allow_undefined_array_items, allow_undefined_type
             )
         if "anyOf" in field_schema:
             return self.combiner_handler.handle_any_of(
-                field_schema["anyOf"], root_schema, allow_undefined_array_items
+                field_schema["anyOf"], root_schema, allow_undefined_array_items, allow_undefined_type
             )
         if "oneOf" in field_schema:
             return self.combiner_handler.handle_one_of(
-                field_schema, root_schema, allow_undefined_array_items
+                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type
             )
 
         # Handle arrays by recursively processing items
@@ -224,7 +226,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Recursively process the items schema through the model builder
             # This ensures that object types get proper models created
             item_type = self._get_field_type(
-                items_schema, root_schema, allow_undefined_array_items
+                items_schema, root_schema, allow_undefined_array_items, allow_undefined_type
             )
             
             if field_schema.get("uniqueItems", False):
@@ -236,7 +238,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Build the model and cache/cleanup if we tracked this ref
             # Pass the original ref so the model can be named correctly
             model = self.create_pydantic_model(
-                field_schema, root_schema, allow_undefined_array_items, _schema_ref=original_ref
+                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type, _schema_ref=original_ref
             )
             
             # If we were tracking a ref for this field, cache and cleanup
@@ -252,6 +254,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
             schema=field_schema,
             root_schema=root_schema,
             allow_undefined_array_items=allow_undefined_array_items,
+            allow_undefined_type=allow_undefined_type,
         )
 
     def _build_field_info(self, field_schema: Dict[str, Any], required: bool) -> Field:

@@ -518,3 +518,21 @@ def test_type_resolver_edge_cases():
     schema = {"type": ["null"]}
     result = resolver.resolve_type(schema, {})
     assert result is type(None)
+
+
+def test_type_resolver_undefined_type():
+    """Test handling of schemas without an explicit type."""
+    resolver = TypeResolver()
+    from typing import Any
+
+    # Test with undefined type and allow_undefined_type=False (default)
+    schema = {"description": "A field without a type"}
+    # Use the explicit alias in pytest.raises
+    with pytest.raises(
+        JsonSchemaTypeError, match="Schema must specify a type. Set allow_undefined_type=True"
+    ):
+        resolver.resolve_type(schema, {})
+
+    # Test with undefined type and allow_undefined_type=True
+    result = resolver.resolve_type(schema, {}, allow_undefined_type=True)
+    assert result is Any
