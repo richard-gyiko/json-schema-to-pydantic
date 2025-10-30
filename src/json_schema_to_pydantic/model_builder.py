@@ -29,7 +29,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         "type", "title", "description", "properties", "required", "additionalProperties",
         "patternProperties", "dependencies", "propertyNames", "if", "then", "else",
         "allOf", "anyOf", "oneOf", "not", "$ref", "$defs", "definitions", "$schema", 
-        "$id", "$comment"
+        "$id", "$comment", "items", "minItems", "maxItems", "uniqueItems"
     }
 
     def __init__(self, base_model_type: Type[T] = BaseModel):

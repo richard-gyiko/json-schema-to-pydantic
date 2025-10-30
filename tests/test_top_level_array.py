@@ -357,3 +357,36 @@ def test_top_level_array_with_custom_base_model():
     
     model = Model.model_validate(["a", "b", "c"])
     assert model.root == ["a", "b", "c"]
+
+
+def test_top_level_array_extra_properties():
+    """Test that non-standard properties are properly handled in json_schema_extra."""
+    schema = {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 1,
+        "customField": "customValue",
+        "anotherCustom": 123
+    }
+    
+    Model = create_model(schema)
+    
+    # Standard array properties (items, minItems) should not be in json_schema_extra
+    # Only custom properties should be there
+    if hasattr(Model, 'model_config') and Model.model_config:
+        config_dict = Model.model_config
+        if 'json_schema_extra' in config_dict:
+            extra = config_dict['json_schema_extra']
+            # Custom properties should be present
+            assert "customField" in extra
+            assert extra["customField"] == "customValue"
+            assert "anotherCustom" in extra
+            assert extra["anotherCustom"] == 123
+            # Standard properties should not be in extra
+            assert "items" not in extra
+            assert "minItems" not in extra
+            assert "type" not in extra
+    
+    # Model should still work correctly
+    model = Model.model_validate(["a", "b"])
+    assert model.root == ["a", "b"]
