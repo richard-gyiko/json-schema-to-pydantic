@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional, Set, Type, TypeVar
+from typing import Annotated, Any, Dict, List, Optional, Set, Type, TypeVar
 
-from pydantic import BaseModel, Field, create_model, ConfigDict
+from pydantic import BaseModel, Field, RootModel, create_model, ConfigDict
 
 from .builders import ConstraintBuilder
 from .handlers import CombinerHandler
@@ -105,6 +105,12 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 schema["oneOf"], root_schema, allow_undefined_array_items
             )
 
+        # Handle top-level arrays
+        if schema.get("type") == "array":
+            return self._create_array_root_model(
+                schema, root_schema, allow_undefined_array_items, original_ref
+            )
+
         # Get model properties
         # If this schema is referenced, use the ref name as the title if no title is provided
         if original_ref and "title" not in schema:
@@ -162,6 +168,106 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Clear the rebuild set
             self._models_to_rebuild.clear()
 
+        return model
+
+    def _create_array_root_model(
+        self,
+        schema: Dict[str, Any],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        original_ref: Optional[str],
+    ) -> Type[T]:
+        """
+        Creates a RootModel for top-level array schemas.
+        
+        Args:
+            schema: The array schema definition
+            root_schema: The root schema containing definitions
+            allow_undefined_array_items: Whether to allow arrays without items
+            original_ref: The original reference if this was a $ref
+            
+        Returns:
+            A RootModel class that validates arrays
+        """
+        # Get the title for the model
+        if original_ref and "title" not in schema:
+            ref_parts = original_ref.split("/")
+            title = ref_parts[-1] if ref_parts else "DynamicModel"
+        else:
+            title = schema.get("title", "DynamicModel")
+        
+        # Get description
+        description = schema.get("description")
+        
+        # Resolve the item type
+        items_schema = schema.get("items")
+        if not items_schema:
+            if allow_undefined_array_items:
+                item_type = Any
+            else:
+                from .exceptions import TypeError
+                raise TypeError("Array type must specify 'items' schema")
+        else:
+            item_type = self._get_field_type(
+                items_schema, root_schema, allow_undefined_array_items
+            )
+        
+        # Determine if we need to use Set or List
+        if schema.get("uniqueItems", False):
+            array_type = Set[item_type]
+        else:
+            array_type = List[item_type]
+        
+        # Build constraints for the array
+        constraints = self.constraint_builder.build_constraints(schema)
+        
+        # Extract model-level json_schema_extra (non-standard properties)
+        model_extra = {
+            key: value for key, value in schema.items()
+            if key not in self.STANDARD_MODEL_PROPERTIES
+        }
+        
+        # Create the RootModel class dynamically
+        # RootModel requires the type to be specified as a generic parameter
+        # We create a class that properly inherits from RootModel[array_type]
+        
+        # Build the class namespace
+        namespace = {}
+        if description:
+            namespace["__doc__"] = description
+        
+        # Add model_config if we have extra properties
+        if model_extra:
+            namespace["model_config"] = ConfigDict(json_schema_extra=model_extra)
+        
+        # Apply constraints to the root field using Annotated
+        if constraints:
+            # Use Annotated to add Field constraints to the array type
+            annotated_type = Annotated[array_type, Field(**constraints)]
+            namespace["__annotations__"] = {"root": annotated_type}
+            # We need to set root to the annotated type for proper validation
+            # This tells Pydantic to use the constraints when validating
+        
+        # Create the RootModel subclass
+        model = type(
+            title,
+            (RootModel[array_type],),
+            namespace
+        )
+        
+        # Cache the model if it was referenced
+        if original_ref:
+            self._model_cache[original_ref] = model
+            # Mark model for rebuild if needed
+            self._models_to_rebuild.add(model)
+        
+        # Rebuild models if this is the top-level call
+        if not self._building_models and self._models_to_rebuild:
+            namespace = {m.__name__: m for m in self._models_to_rebuild}
+            for m in self._models_to_rebuild:
+                m.model_rebuild(_types_namespace=namespace)
+            self._models_to_rebuild.clear()
+        
         return model
 
     def _get_field_type(
