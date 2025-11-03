@@ -243,10 +243,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Apply constraints to the root field using Annotated
         if constraints:
             # Use Annotated to add Field constraints to the array type
-            annotated_type = Annotated[array_type, Field(**constraints)]
-            namespace["__annotations__"] = {"root": annotated_type}
-            # We need to set root to the annotated type for proper validation
-            # This tells Pydantic to use the constraints when validating
+            root_type = Annotated[array_type, Field(**constraints)]
+        else:
+            root_type = array_type
+        namespace["__annotations__"] = {"root": root_type}
         
         # Create the RootModel subclass
         model = type(
