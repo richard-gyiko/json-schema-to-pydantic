@@ -134,6 +134,12 @@ class CombinerHandler(ICombinerHandler):
         if not schemas:
             raise CombinerError("oneOf must contain at least one schema")
 
+        # Check for const/literal union pattern
+        # Example: {"oneOf": [{"const": "a"}, {"const": "b"}]}
+        if all("const" in s for s in schemas):
+            const_values = [s["const"] for s in schemas]
+            return RootModel[Literal[tuple(const_values)]]
+
         # Create a model for each variant
         variant_models = {}
 

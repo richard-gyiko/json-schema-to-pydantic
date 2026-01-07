@@ -147,6 +147,18 @@ def test_one_of_handler():
     model = handler.handle_one_of(schema, {})
     assert issubclass(model, BaseModel)
 
+def test_one_of_handler_with_const():
+    handler = create_handler()
+
+    schema = {
+        "oneOf": [
+            {"const": "dog"},
+            {"const": "cat"},
+        ]
+    }
+    model = handler.handle_one_of(schema, {})
+    assert issubclass(model, BaseModel)
+    assert model == Literal["dog", "cat"]
 
 def test_all_of_with_conflicting_constraints():
     handler = create_handler()
