@@ -112,6 +112,21 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 schema, root_schema, allow_undefined_array_items, original_ref
             )
 
+        # Handle top-level scalars
+        # We check for explicit scalar types or enum/const
+        schema_type = schema.get("type")
+        is_scalar = (
+            (isinstance(schema_type, str) and schema_type in ("string", "integer", "number", "boolean", "null")) or
+            (isinstance(schema_type, list) and "object" not in schema_type and "array" not in schema_type) or
+            "enum" in schema or 
+            "const" in schema
+        )
+        
+        if is_scalar:
+             return self._create_scalar_root_model(
+                schema, root_schema, allow_undefined_array_items, allow_undefined_type, original_ref
+            )
+
         # Get model properties
         # If this schema is referenced, use the ref name as the title if no title is provided
         if original_ref and "title" not in schema:
@@ -269,6 +284,74 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 m.model_rebuild(_types_namespace=namespace)
             self._models_to_rebuild.clear()
         
+        return model
+
+    def _create_scalar_root_model(
+        self,
+        schema: Dict[str, Any],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        allow_undefined_type: bool,
+        original_ref: Optional[str],
+    ) -> Type[T]:
+        """
+        Creates a RootModel for top-level scalar schemas (string, integer, etc).
+        """
+        # Get the title for the model
+        if original_ref and "title" not in schema:
+            ref_parts = original_ref.split("/")
+            title = ref_parts[-1] if ref_parts else "DynamicModel"
+        else:
+            title = schema.get("title", "DynamicModel")
+        
+        description = schema.get("description")
+
+        # Resolve the scalar type using existing logic
+        scalar_type = self.type_resolver.resolve_type(
+            schema, root_schema, allow_undefined_array_items, allow_undefined_type
+        )
+
+        # Build constraints
+        constraints = self.constraint_builder.build_constraints(schema)
+        
+        # Extract model-level json_schema_extra
+        model_extra = {
+            key: value for key, value in schema.items()
+            if key not in self.STANDARD_MODEL_PROPERTIES
+        }
+        
+        # Build the class namespace
+        namespace = {}
+        if description:
+            namespace["__doc__"] = description
+            
+        if model_extra:
+            namespace["model_config"] = ConfigDict(json_schema_extra=model_extra)
+            
+        # Apply constraints using Annotated if needed
+        if isinstance(constraints, dict) and constraints:
+            root_type = Annotated[scalar_type, Field(**constraints)]
+        else:
+            root_type = scalar_type
+            
+        namespace["__annotations__"] = {"root": root_type}
+        
+        model = type(
+            title,
+            (RootModel[scalar_type],),
+            namespace
+        )
+        
+        if original_ref:
+            self._model_cache[original_ref] = model
+            self._models_to_rebuild.add(model)
+            
+        if not self._building_models and self._models_to_rebuild:
+            ns = {m.__name__: m for m in self._models_to_rebuild}
+            for m in self._models_to_rebuild:
+                m.model_rebuild(_types_namespace=ns)
+            self._models_to_rebuild.clear()
+            
         return model
 
     def _get_field_type(
