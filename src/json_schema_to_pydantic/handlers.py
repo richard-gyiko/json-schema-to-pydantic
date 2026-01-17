@@ -148,13 +148,6 @@ class CombinerHandler(ICombinerHandler):
             const_values = tuple(s["const"] for s in schemas)
             return Literal[const_values]
 
-        # Check for simple type union pattern (no objects/arrays with properties)
-        # Example: {"oneOf": [{"type": "integer"}, {"type": "string"}]}
-        if self._is_simple_type_union(schemas, root_schema):
-            return self._handle_simple_type_union(
-                schemas, root_schema, allow_undefined_array_items, allow_undefined_type
-            )
-
         # Check for discriminated union pattern (objects with type const)
         if self._is_discriminated_union(schemas, root_schema):
             return self._handle_discriminated_union(
@@ -162,60 +155,10 @@ class CombinerHandler(ICombinerHandler):
             )
 
         # Fallback: treat as general union (like anyOf)
-        return self._handle_general_union(
+        # This handles simple type unions, refs without discriminators, and mixed schemas
+        return self._handle_union(
             schemas, root_schema, allow_undefined_array_items, allow_undefined_type
         )
-
-    def _is_simple_type_union(
-        self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
-    ) -> bool:
-        """Check if all schemas are simple types (not objects with properties)."""
-        for schema in schemas:
-            if not isinstance(schema, dict):
-                return False
-
-            # Resolve $ref if present
-            resolved = schema
-            if "$ref" in schema:
-                resolved = self.reference_resolver.resolve_ref(
-                    schema["$ref"], schema, root_schema
-                )
-
-            # If it's an object with properties, it's not a simple type union
-            if resolved.get("type") == "object" and "properties" in resolved:
-                return False
-
-            # If it has nested combiners, it's not simple
-            if any(k in resolved for k in ("oneOf", "anyOf", "allOf")):
-                return False
-
-        return True
-
-    def _handle_simple_type_union(
-        self,
-        schemas: List[Dict[str, Any]],
-        root_schema: Dict[str, Any],
-        allow_undefined_array_items: bool,
-        allow_undefined_type: bool,
-    ) -> Any:
-        """Handle oneOf with simple types by creating a Union."""
-        possible_types = []
-        for schema in schemas:
-            if not isinstance(schema, dict):
-                raise CombinerError(f"Invalid schema in oneOf: {schema}")
-
-            # Resolve $ref if present
-            if "$ref" in schema:
-                schema = self.reference_resolver.resolve_ref(
-                    schema["$ref"], schema, root_schema
-                )
-
-            resolved_type = self.recursive_field_builder(
-                schema, root_schema, allow_undefined_array_items, allow_undefined_type
-            )
-            possible_types.append(resolved_type)
-
-        return Union[tuple(possible_types)]
 
     def _is_discriminated_union(
         self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
@@ -316,25 +259,20 @@ class CombinerHandler(ICombinerHandler):
             ]
             return RootModel[union_type]
 
-    def _handle_general_union(
+    def _handle_union(
         self,
         schemas: List[Dict[str, Any]],
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool,
         allow_undefined_type: bool,
     ) -> Any:
-        """Handle oneOf as a general union (like anyOf) when no specific pattern matches."""
+        """Handle oneOf as a union type (like anyOf)."""
         possible_types = []
         for schema in schemas:
             if not isinstance(schema, dict):
                 raise CombinerError(f"Invalid schema in oneOf: {schema}")
 
-            # Resolve $ref if present
-            if "$ref" in schema:
-                schema = self.reference_resolver.resolve_ref(
-                    schema["$ref"], schema, root_schema
-                )
-
+            # Let recursive_field_builder handle $ref resolution
             resolved_type = self.recursive_field_builder(
                 schema, root_schema, allow_undefined_array_items, allow_undefined_type
             )

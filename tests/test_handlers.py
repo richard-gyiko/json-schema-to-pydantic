@@ -720,9 +720,26 @@ def test_one_of_const_union():
 
     literal_type = handler.handle_one_of(schemas, {})
     # Should return a Literal type
-    from typing import get_args, Literal
+    from typing import get_args
 
     assert get_args(literal_type) == ("red", "green", "blue")
+
+
+def test_one_of_const_union_with_falsy_values():
+    """Test oneOf with falsy const values (empty string, 0, null)."""
+    handler = create_handler()
+
+    schemas = [
+        {"const": ""},
+        {"const": 0},
+        {"const": None},
+        {"const": False},
+    ]
+
+    literal_type = handler.handle_one_of(schemas, {})
+    from typing import get_args
+
+    assert get_args(literal_type) == ("", 0, None, False)
 
 
 def test_one_of_ref_without_discriminator():
