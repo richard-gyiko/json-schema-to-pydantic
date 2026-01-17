@@ -146,7 +146,13 @@ class CombinerHandler(ICombinerHandler):
         # Example: {"oneOf": [{"const": "a"}, {"const": "b"}]}
         if all(isinstance(s, dict) and "const" in s for s in schemas):
             const_values = tuple(s["const"] for s in schemas)
-            return Literal[const_values]
+            # Only use Literal if all const values are valid Literal types
+            # (str, int, bool, bytes, None, Enum members)
+            if all(
+                isinstance(v, (str, int, bool, bytes, type(None))) for v in const_values
+            ):
+                return Literal[const_values]
+            # Fall through to general union handling for complex const types
 
         # Check for discriminated union pattern (objects with type const)
         if self._is_discriminated_union(schemas, root_schema):

@@ -783,3 +783,23 @@ def test_one_of_mixed_types():
     # Should include str and None (for null) plus an object model
     assert str in union_type.__args__
     assert type(None) in union_type.__args__
+
+
+def test_one_of_const_with_mixed_valid_types():
+    """Test oneOf with const values of different valid Literal types.
+
+    Literal supports str, int, bool, bytes, None.
+    """
+    handler = create_handler()
+
+    schemas = [
+        {"const": "string_value"},
+        {"const": 42},
+        {"const": True},
+        {"const": None},
+    ]
+
+    literal_type = handler.handle_one_of(schemas, {})
+    from typing import get_args
+
+    assert get_args(literal_type) == ("string_value", 42, True, None)
