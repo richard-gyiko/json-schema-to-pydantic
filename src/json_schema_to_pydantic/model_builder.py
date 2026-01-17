@@ -15,21 +15,73 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
     # Standard JSON Schema properties for fields
     STANDARD_FIELD_PROPERTIES = {
-        "type", "format", "description", "default", "title", "examples",
-        "const", "enum", "multipleOf", "maximum", "exclusiveMaximum", 
-        "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern",
-        "items", "additionalItems", "maxItems", "minItems", "uniqueItems",
-        "properties", "additionalProperties", "required", "patternProperties",
-        "dependencies", "propertyNames", "if", "then", "else", "allOf", 
-        "anyOf", "oneOf", "not", "$ref", "$defs", "definitions"
+        "type",
+        "format",
+        "description",
+        "default",
+        "title",
+        "examples",
+        "const",
+        "enum",
+        "multipleOf",
+        "maximum",
+        "exclusiveMaximum",
+        "minimum",
+        "exclusiveMinimum",
+        "maxLength",
+        "minLength",
+        "pattern",
+        "items",
+        "additionalItems",
+        "maxItems",
+        "minItems",
+        "uniqueItems",
+        "properties",
+        "additionalProperties",
+        "required",
+        "patternProperties",
+        "dependencies",
+        "propertyNames",
+        "if",
+        "then",
+        "else",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "not",
+        "$ref",
+        "$defs",
+        "definitions",
     }
-    
-    # Standard JSON Schema properties for models  
+
+    # Standard JSON Schema properties for models
     STANDARD_MODEL_PROPERTIES = {
-        "type", "title", "description", "properties", "required", "additionalProperties",
-        "patternProperties", "dependencies", "propertyNames", "if", "then", "else",
-        "allOf", "anyOf", "oneOf", "not", "$ref", "$defs", "definitions", "$schema", 
-        "$id", "$comment", "items", "minItems", "maxItems", "uniqueItems"
+        "type",
+        "title",
+        "description",
+        "properties",
+        "required",
+        "additionalProperties",
+        "patternProperties",
+        "dependencies",
+        "propertyNames",
+        "if",
+        "then",
+        "else",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "not",
+        "$ref",
+        "$defs",
+        "definitions",
+        "$schema",
+        "$id",
+        "$comment",
+        "items",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
     }
 
     def __init__(self, base_model_type: Type[T] = BaseModel):
@@ -75,17 +127,17 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Store the original ref if present for tracking
         # Use the passed ref or extract from schema
         original_ref = _schema_ref or schema.get("$ref")
-        
+
         # Handle references
         if "$ref" in schema:
             # Check if we've already built this model
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
-            
+
             # Mark this ref as being built
             if original_ref:
                 self._building_models.add(original_ref)
-            
+
             schema = self.reference_resolver.resolve_ref(
                 schema["$ref"],
                 schema,
@@ -95,15 +147,24 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle combiners
         if "allOf" in schema:
             return self.combiner_handler.handle_all_of(
-                schema["allOf"], root_schema, allow_undefined_array_items, allow_undefined_type
+                schema["allOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
         if "anyOf" in schema:
             return self.combiner_handler.handle_any_of(
-                schema["anyOf"], root_schema, allow_undefined_array_items, allow_undefined_type
+                schema["anyOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
         if "oneOf" in schema:
             return self.combiner_handler.handle_one_of(
-                schema["oneOf"], root_schema, allow_undefined_array_items, allow_undefined_type
+                schema["oneOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
 
         # Handle top-level arrays
@@ -125,7 +186,8 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         # Extract model-level json_schema_extra
         model_extra = {
-            key: value for key, value in schema.items()
+            key: value
+            for key, value in schema.items()
             if key not in self.STANDARD_MODEL_PROPERTIES
         }
 
@@ -133,7 +195,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
         fields = {}
         for field_name, field_schema in properties.items():
             field_type = self._get_field_type(
-                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                field_schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
             field_info = self._build_field_info(field_schema, field_name in required)
             fields[field_name] = (field_type, field_info)
@@ -143,11 +208,11 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Create a dynamic base class with the config
             class DynamicBase(self.base_model_type):
                 model_config = ConfigDict(json_schema_extra=model_extra)
-            
+
             model = create_model(title, __base__=DynamicBase, **fields)
         else:
             model = create_model(title, __base__=self.base_model_type, **fields)
-            
+
         if description:
             model.__doc__ = description
 
@@ -180,13 +245,13 @@ class PydanticModelBuilder(IModelBuilder[T]):
     ) -> Type[T]:
         """
         Creates a RootModel for top-level array schemas.
-        
+
         Args:
             schema: The array schema definition
             root_schema: The root schema containing definitions
             allow_undefined_array_items: Whether to allow arrays without items
             original_ref: The original reference if this was a $ref
-            
+
         Returns:
             A RootModel class that validates arrays
         """
@@ -196,10 +261,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
             title = ref_parts[-1] if ref_parts else "DynamicModel"
         else:
             title = schema.get("title", "DynamicModel")
-        
+
         # Get description
         description = schema.get("description")
-        
+
         # Resolve the item type
         items_schema = schema.get("items")
         if not items_schema:
@@ -207,40 +272,42 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 item_type = Any
             else:
                 from .exceptions import TypeError
+
                 raise TypeError("Array type must specify 'items' schema")
         else:
             item_type = self._get_field_type(
                 items_schema, root_schema, allow_undefined_array_items
             )
-        
+
         # Determine if we need to use Set or List
         if schema.get("uniqueItems", False):
             array_type = Set[item_type]
         else:
             array_type = List[item_type]
-        
+
         # Build constraints for the array
         constraints = self.constraint_builder.build_constraints(schema)
-        
+
         # Extract model-level json_schema_extra (non-standard properties)
         model_extra = {
-            key: value for key, value in schema.items()
+            key: value
+            for key, value in schema.items()
             if key not in self.STANDARD_MODEL_PROPERTIES
         }
-        
+
         # Create the RootModel class dynamically
         # RootModel requires the type to be specified as a generic parameter
         # We create a class that properly inherits from RootModel[array_type]
-        
+
         # Build the class namespace
         namespace = {}
         if description:
             namespace["__doc__"] = description
-        
+
         # Add model_config if we have extra properties
         if model_extra:
             namespace["model_config"] = ConfigDict(json_schema_extra=model_extra)
-        
+
         # Apply constraints to the root field using Annotated
         if constraints:
             # Use Annotated to add Field constraints to the array type
@@ -248,27 +315,23 @@ class PydanticModelBuilder(IModelBuilder[T]):
         else:
             root_type = array_type
         namespace["__annotations__"] = {"root": root_type}
-        
+
         # Create the RootModel subclass
-        model = type(
-            title,
-            (RootModel[array_type],),
-            namespace
-        )
-        
+        model = type(title, (RootModel[array_type],), namespace)
+
         # Cache the model if it was referenced
         if original_ref:
             self._model_cache[original_ref] = model
             # Mark model for rebuild if needed
             self._models_to_rebuild.add(model)
-        
+
         # Rebuild models if this is the top-level call
         if not self._building_models and self._models_to_rebuild:
             namespace = {m.__name__: m for m in self._models_to_rebuild}
             for m in self._models_to_rebuild:
                 m.model_rebuild(_types_namespace=namespace)
             self._models_to_rebuild.clear()
-        
+
         return model
 
     def _get_field_type(
@@ -281,7 +344,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         """Resolves the Python type for a field schema."""
         # Store the original ref if present
         original_ref = field_schema.get("$ref")
-        
+
         if "$ref" in field_schema:
             # Check if this reference is already being built (recursive reference)
             if original_ref in self._building_models:
@@ -293,14 +356,14 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 ref_parts = original_ref.split("/")
                 model_name = ref_parts[-1] if ref_parts else "DynamicModel"
                 return model_name
-            
+
             # Check if we've already built this model
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
-            
+
             # Mark this ref as being built before resolving
             self._building_models.add(original_ref)
-            
+
             field_schema = self.reference_resolver.resolve_ref(
                 field_schema["$ref"], field_schema, root_schema
             )
@@ -308,15 +371,24 @@ class PydanticModelBuilder(IModelBuilder[T]):
         # Handle combiners
         if "allOf" in field_schema:
             return self.combiner_handler.handle_all_of(
-                field_schema["allOf"], root_schema, allow_undefined_array_items, allow_undefined_type
+                field_schema["allOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
         if "anyOf" in field_schema:
             return self.combiner_handler.handle_any_of(
-                field_schema["anyOf"], root_schema, allow_undefined_array_items, allow_undefined_type
+                field_schema["anyOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
         if "oneOf" in field_schema:
             return self.combiner_handler.handle_one_of(
-                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                field_schema["oneOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
 
         # Handle arrays by recursively processing items
@@ -327,14 +399,18 @@ class PydanticModelBuilder(IModelBuilder[T]):
                     return List[Any]
                 else:
                     from .exceptions import TypeError
+
                     raise TypeError("Array type must specify 'items' schema")
 
             # Recursively process the items schema through the model builder
             # This ensures that object types get proper models created
             item_type = self._get_field_type(
-                items_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                items_schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
-            
+
             if field_schema.get("uniqueItems", False):
                 return Set[item_type]
             return List[item_type]
@@ -344,16 +420,20 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Build the model and cache/cleanup if we tracked this ref
             # Pass the original ref so the model can be named correctly
             model = self.create_pydantic_model(
-                field_schema, root_schema, allow_undefined_array_items, allow_undefined_type, _schema_ref=original_ref
+                field_schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
+                _schema_ref=original_ref,
             )
-            
+
             # If we were tracking a ref for this field, cache and cleanup
             if original_ref and original_ref in self._building_models:
                 self._model_cache[original_ref] = model
                 self._building_models.discard(original_ref)
                 # Mark model for rebuild after all models are created
                 self._models_to_rebuild.add(model)
-            
+
             return model
 
         return self.type_resolver.resolve_type(
@@ -386,10 +466,11 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         # Extract field-level json_schema_extra
         field_extra = {
-            key: value for key, value in field_schema.items()
+            key: value
+            for key, value in field_schema.items()
             if key not in self.STANDARD_FIELD_PROPERTIES
         }
-        
+
         if field_extra:
             field_kwargs["json_schema_extra"] = field_extra
 

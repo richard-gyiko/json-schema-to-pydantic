@@ -81,7 +81,10 @@ class CombinerHandler(ICombinerHandler):
         field_definitions = {}
         for name, prop_schema in merged_properties.items():
             field_type = self.recursive_field_builder(
-                prop_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                prop_schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
             )
             field_info = self.field_info_builder(prop_schema, name in required_fields)
             field_definitions[name] = (field_type, field_info)
@@ -124,17 +127,127 @@ class CombinerHandler(ICombinerHandler):
 
     def handle_one_of(
         self,
-        schema: Dict[str, Any],
+        schemas: List[Dict[str, Any]],
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
-    ) -> Type[BaseModel]:
-        """Implements discriminated unions using a type field."""
-        schemas = schema.get("oneOf", [])
+    ) -> Any:
+        """
+        Handles oneOf schema combiner with support for multiple patterns:
+        - Const/literal unions: {"oneOf": [{"const": "a"}, {"const": "b"}]}
+        - Simple type unions: {"oneOf": [{"type": "integer"}, {"type": "string"}]}
+        - Discriminated unions: objects with a "type" const property
+        - General unions: fallback to Union type for any other schemas
+        """
         if not schemas:
             raise CombinerError("oneOf must contain at least one schema")
 
-        # Create a model for each variant
+        # Check for const/literal union pattern
+        # Example: {"oneOf": [{"const": "a"}, {"const": "b"}]}
+        if all(isinstance(s, dict) and "const" in s for s in schemas):
+            const_values = tuple(s["const"] for s in schemas)
+            return Literal[const_values]
+
+        # Check for simple type union pattern (no objects/arrays with properties)
+        # Example: {"oneOf": [{"type": "integer"}, {"type": "string"}]}
+        if self._is_simple_type_union(schemas, root_schema):
+            return self._handle_simple_type_union(
+                schemas, root_schema, allow_undefined_array_items, allow_undefined_type
+            )
+
+        # Check for discriminated union pattern (objects with type const)
+        if self._is_discriminated_union(schemas, root_schema):
+            return self._handle_discriminated_union(
+                schemas, root_schema, allow_undefined_array_items, allow_undefined_type
+            )
+
+        # Fallback: treat as general union (like anyOf)
+        return self._handle_general_union(
+            schemas, root_schema, allow_undefined_array_items, allow_undefined_type
+        )
+
+    def _is_simple_type_union(
+        self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
+    ) -> bool:
+        """Check if all schemas are simple types (not objects with properties)."""
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                return False
+
+            # Resolve $ref if present
+            resolved = schema
+            if "$ref" in schema:
+                resolved = self.reference_resolver.resolve_ref(
+                    schema["$ref"], schema, root_schema
+                )
+
+            # If it's an object with properties, it's not a simple type union
+            if resolved.get("type") == "object" and "properties" in resolved:
+                return False
+
+            # If it has nested combiners, it's not simple
+            if any(k in resolved for k in ("oneOf", "anyOf", "allOf")):
+                return False
+
+        return True
+
+    def _handle_simple_type_union(
+        self,
+        schemas: List[Dict[str, Any]],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        allow_undefined_type: bool,
+    ) -> Any:
+        """Handle oneOf with simple types by creating a Union."""
+        possible_types = []
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                raise CombinerError(f"Invalid schema in oneOf: {schema}")
+
+            # Resolve $ref if present
+            if "$ref" in schema:
+                schema = self.reference_resolver.resolve_ref(
+                    schema["$ref"], schema, root_schema
+                )
+
+            resolved_type = self.recursive_field_builder(
+                schema, root_schema, allow_undefined_array_items, allow_undefined_type
+            )
+            possible_types.append(resolved_type)
+
+        return Union[tuple(possible_types)]
+
+    def _is_discriminated_union(
+        self, schemas: List[Dict[str, Any]], root_schema: Dict[str, Any]
+    ) -> bool:
+        """Check if all schemas are objects with a type const discriminator."""
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                return False
+
+            # Resolve $ref if present
+            resolved = schema
+            if "$ref" in schema:
+                resolved = self.reference_resolver.resolve_ref(
+                    schema["$ref"], schema, root_schema
+                )
+
+            # Must have properties with a type const
+            properties = resolved.get("properties", {})
+            type_prop = properties.get("type", {})
+            if not isinstance(type_prop, dict) or "const" not in type_prop:
+                return False
+
+        return True
+
+    def _handle_discriminated_union(
+        self,
+        schemas: List[Dict[str, Any]],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        allow_undefined_type: bool,
+    ) -> Type[BaseModel]:
+        """Handle oneOf with discriminated union pattern (objects with type const)."""
         variant_models = {}
 
         for variant_schema in schemas:
@@ -142,17 +255,15 @@ class CombinerHandler(ICombinerHandler):
                 raise CombinerError(f"Invalid schema in oneOf: {variant_schema}")
 
             # Resolve $ref if present at the variant level
-            ref_path = None  # Initialize ref_path
+            ref_path = None
             if "$ref" in variant_schema:
-                ref_path = variant_schema["$ref"]  # Store the ref path
+                ref_path = variant_schema["$ref"]
                 variant_schema = self.reference_resolver.resolve_ref(
                     ref_path, variant_schema, root_schema
                 )
 
             properties = variant_schema.get("properties", {})
             type_const = properties.get("type", {}).get("const")
-            if not type_const:
-                raise CombinerError("Each oneOf variant must have a type const")
 
             # Create field definitions for this variant
             fields = {}
@@ -166,25 +277,27 @@ class CombinerHandler(ICombinerHandler):
                         Field(default=type_const, description=description),
                     )
                 elif "oneOf" in prop_schema:
-                    # Handle nested oneOf using the callback
                     field_type = self.recursive_field_builder(
-                        prop_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                        prop_schema,
+                        root_schema,
+                        allow_undefined_array_items,
+                        allow_undefined_type,
                     )
-                    # Use field_info_builder for nested oneOf field info
                     field_info = self.field_info_builder(prop_schema, name in required)
                     fields[name] = (field_type, field_info)
-                # Add other properties to the fields dictionary
-                elif name != "type":  # Skip the type field as it's handled above
+                elif name != "type":
                     field_type = self.recursive_field_builder(
-                        prop_schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                        prop_schema,
+                        root_schema,
+                        allow_undefined_array_items,
+                        allow_undefined_type,
                     )
                     field_info = self.field_info_builder(prop_schema, name in required)
                     fields[name] = (field_type, field_info)
 
-            # Create model for this variant
             # Use the name from the $ref if available, otherwise generate one
             if ref_path:
-                model_name = ref_path.split("/")[-1]  # Extract name from ref
+                model_name = ref_path.split("/")[-1]
             else:
                 model_name = f"Variant_{type_const}"
 
@@ -202,3 +315,29 @@ class CombinerHandler(ICombinerHandler):
                 Discriminator(discriminator="type"),
             ]
             return RootModel[union_type]
+
+    def _handle_general_union(
+        self,
+        schemas: List[Dict[str, Any]],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        allow_undefined_type: bool,
+    ) -> Any:
+        """Handle oneOf as a general union (like anyOf) when no specific pattern matches."""
+        possible_types = []
+        for schema in schemas:
+            if not isinstance(schema, dict):
+                raise CombinerError(f"Invalid schema in oneOf: {schema}")
+
+            # Resolve $ref if present
+            if "$ref" in schema:
+                schema = self.reference_resolver.resolve_ref(
+                    schema["$ref"], schema, root_schema
+                )
+
+            resolved_type = self.recursive_field_builder(
+                schema, root_schema, allow_undefined_array_items, allow_undefined_type
+            )
+            possible_types.append(resolved_type)
+
+        return Union[tuple(possible_types)]
