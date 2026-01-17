@@ -52,7 +52,7 @@ class ICombinerHandler(ABC):
     @abstractmethod
     def handle_one_of(
         self,
-        schema: Dict[str, Any],
+        schemas: List[Dict[str, Any]],
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,

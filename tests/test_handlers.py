@@ -51,7 +51,7 @@ def create_handler():
                 simple_field_info_builder,
             )
             return temp_handler.handle_one_of(
-                schema, root_schema, allow_undefined_array_items
+                schema["oneOf"], root_schema, allow_undefined_array_items
             )
         elif "anyOf" in schema:
             temp_handler = CombinerHandler(
@@ -144,7 +144,7 @@ def test_one_of_handler():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
     assert issubclass(model, BaseModel)
 
 
@@ -214,7 +214,7 @@ def test_one_of_validation():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Test circle
     circle = model(type="circle", radius=5.0)
@@ -242,7 +242,7 @@ def test_empty_combiners():
         handler.handle_any_of([], {})
 
     with pytest.raises(CombinerError):
-        handler.handle_one_of({"oneOf": []}, {})
+        handler.handle_one_of([], {})
 
 
 def test_one_of_invalid_schema():
@@ -297,7 +297,7 @@ def test_one_of_nested():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Test nested discriminated union
     instance = model(type="parent", child={"type": "child1", "value": "test"})
@@ -324,7 +324,7 @@ def test_one_of_required_fields():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Test missing required field
     with pytest.raises(ValueError):
@@ -349,7 +349,7 @@ def test_optional_fields():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Test with only required fields
     instance = model(root={"type": "user", "username": "test"})
@@ -378,7 +378,7 @@ def test_field_descriptions():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Get field info from model
     field_info = model.model_fields["root"].annotation.model_fields
@@ -401,7 +401,7 @@ def test_one_of_invalid_discriminator():
         ]
     }
 
-    model = handler.handle_one_of(schema, {})
+    model = handler.handle_one_of(schema["oneOf"], {})
 
     # Test invalid discriminator value
     with pytest.raises(ValueError):
@@ -463,7 +463,7 @@ def test_one_of_with_ref():
         ]
     }
 
-    model = handler.handle_one_of(schema, root_schema)
+    model = handler.handle_one_of(schema["oneOf"], root_schema)
     assert issubclass(model, RootModel)
 
     # Test dog variant
@@ -548,7 +548,7 @@ def test_one_of_property_with_ref():
 
     # Simulate ModelBuilder call for the property
     prop_schema = root_schema["properties"]["choice"]
-    model = handler.handle_one_of(prop_schema, root_schema)
+    model = handler.handle_one_of(prop_schema["oneOf"], root_schema)
 
     assert issubclass(model, RootModel)
 
@@ -690,3 +690,116 @@ def test_all_of_merging_ref_and_inline():
         model(id=1, description="A long description")  # Missing status
     with pytest.raises(ValueError):
         model(description="A long description", status="active")  # Missing id
+
+
+def test_one_of_simple_type_union():
+    """Test oneOf with simple type variants (Issue #37)."""
+    handler = create_handler()
+
+    schemas = [
+        {"type": "integer"},
+        {"type": "string"},
+    ]
+
+    union_type = handler.handle_one_of(schemas, {})
+    # Should return a Union type, not a discriminated model
+    assert hasattr(union_type, "__args__")
+    assert int in union_type.__args__
+    assert str in union_type.__args__
+
+
+def test_one_of_const_union():
+    """Test oneOf with const values creates a Literal type."""
+    handler = create_handler()
+
+    schemas = [
+        {"const": "red"},
+        {"const": "green"},
+        {"const": "blue"},
+    ]
+
+    literal_type = handler.handle_one_of(schemas, {})
+    # Should return a Literal type
+    from typing import get_args
+
+    assert get_args(literal_type) == ("red", "green", "blue")
+
+
+def test_one_of_const_union_with_falsy_values():
+    """Test oneOf with falsy const values (empty string, 0, null)."""
+    handler = create_handler()
+
+    schemas = [
+        {"const": ""},
+        {"const": 0},
+        {"const": None},
+        {"const": False},
+    ]
+
+    literal_type = handler.handle_one_of(schemas, {})
+    from typing import get_args
+
+    assert get_args(literal_type) == ("", 0, None, False)
+
+
+def test_one_of_ref_without_discriminator():
+    """Test oneOf with $ref variants that don't have a type const discriminator."""
+    handler = create_handler()
+
+    root_schema = {
+        "$defs": {
+            "StringOption": {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+            },
+            "IntOption": {
+                "type": "object",
+                "properties": {"value": {"type": "integer"}},
+            },
+        }
+    }
+    schemas = [
+        {"$ref": "#/$defs/StringOption"},
+        {"$ref": "#/$defs/IntOption"},
+    ]
+
+    # Should handle refs without discriminator by falling back to general union
+    union_type = handler.handle_one_of(schemas, root_schema)
+    assert hasattr(union_type, "__args__")
+
+
+def test_one_of_mixed_types():
+    """Test oneOf with a mix of simple types and objects."""
+    handler = create_handler()
+
+    schemas = [
+        {"type": "string"},
+        {"type": "null"},
+        {"type": "object", "properties": {"name": {"type": "string"}}},
+    ]
+
+    union_type = handler.handle_one_of(schemas, {})
+    assert hasattr(union_type, "__args__")
+    # Should include str and None (for null) plus an object model
+    assert str in union_type.__args__
+    assert type(None) in union_type.__args__
+
+
+def test_one_of_const_with_mixed_valid_types():
+    """Test oneOf with const values of different valid Literal types.
+
+    Literal supports str, int, bool, bytes, None.
+    """
+    handler = create_handler()
+
+    schemas = [
+        {"const": "string_value"},
+        {"const": 42},
+        {"const": True},
+        {"const": None},
+    ]
+
+    literal_type = handler.handle_one_of(schemas, {})
+    from typing import get_args
+
+    assert get_args(literal_type) == ("string_value", 42, True, None)
