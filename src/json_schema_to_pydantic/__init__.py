@@ -1,3 +1,5 @@
+import importlib.metadata
+
 from .exceptions import (
     CombinerError,
     ReferenceError,
@@ -5,8 +7,6 @@ from .exceptions import (
     TypeError,
 )
 from .model_builder import PydanticModelBuilder
-
-import importlib.metadata
 
 try:
     __version__ = importlib.metadata.version(__name__)
@@ -27,16 +27,19 @@ def create_model(
     root_schema: Optional[Dict[str, Any]] = None,
     allow_undefined_array_items: bool = False,
     allow_undefined_type: bool = False,
+    populate_by_name: bool = False,
 ) -> Type[T]:
     """
     Create a Pydantic model from a JSON Schema.
 
     Args:
         schema: The JSON Schema to convert
+        base_model_type: The base Pydantic model type to use. Defaults to pydantic.BaseModel
         root_schema: The root schema containing definitions.
                     Defaults to schema if not provided.
         allow_undefined_array_items: If True, allows arrays without items schema
         allow_undefined_type: If True, allows schemas without an explicit type
+        populate_by_name: If True, allows population of model fields by name and alias
 
     Returns:
         A Pydantic model class
@@ -48,7 +51,13 @@ def create_model(
         ReferenceError: If there's an error resolving references
     """
     builder = PydanticModelBuilder(base_model_type=base_model_type)
-    return builder.create_pydantic_model(schema, root_schema, allow_undefined_array_items, allow_undefined_type)
+    return builder.create_pydantic_model(
+        schema,
+        root_schema,
+        allow_undefined_array_items,
+        allow_undefined_type,
+        populate_by_name,
+    )
 
 
 __all__ = [

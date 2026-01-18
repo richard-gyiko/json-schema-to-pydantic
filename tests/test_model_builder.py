@@ -2,7 +2,7 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 # Explicitly import custom TypeError with an alias
-from json_schema_to_pydantic.exceptions import TypeError as JsonSchemaTypeError
+from json_schema_to_pydantic.exceptions import SchemaError, TypeError as JsonSchemaTypeError
 from json_schema_to_pydantic.model_builder import PydanticModelBuilder
 
 
@@ -437,11 +437,7 @@ def test_model_with_underscore_property(populate_by_name):
         "required": ["_name"],
     }
 
-    model = builder.create_pydantic_model(
-        schema,
-        CustomBaseModel,
-        populate_by_name=populate_by_name,
-    )
+    model = builder.create_pydantic_model(schema, populate_by_name=populate_by_name)
 
     assert model.__name__ == "TestModel"
     assert model.__doc__ == "A test model"
@@ -465,3 +461,17 @@ def test_model_with_underscore_property(populate_by_name):
     # Test required field validation
     with pytest.raises(ValueError):
         model(age=25)
+
+def test_model_with_underscore_collision():
+    """Test model creation with properties that collide after removing underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "title": "CollisionModel",
+        "description": "A model with colliding properties",
+        "type": "object",
+        "properties": {"_name": {"type": "string"}, "name": {"type": "string"}},
+        "required": ["_name", "name"],
+    }
+
+    with pytest.raises(SchemaError, match="Duplicate field name after sanitization: 'name'"):
+        builder.create_pydantic_model(schema)

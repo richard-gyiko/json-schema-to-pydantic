@@ -2,6 +2,7 @@ from typing import Annotated, Any, Dict, List, Optional, Set, Type, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
 
+from . import SchemaError
 from .builders import ConstraintBuilder
 from .handlers import CombinerHandler
 from .interfaces import IModelBuilder
@@ -106,7 +107,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
     def create_pydantic_model(
         self,
         schema: Dict[str, Any],
-        root_schema: Optional[Dict[str, Any] | Type[BaseModel]] = None,
+        root_schema: Optional[Dict[str, Any]] = None,
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
         populate_by_name: bool = False,
@@ -118,6 +119,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
         Args:
             schema: The JSON Schema to convert
             root_schema: The root schema containing definitions
+            allow_undefined_array_items: If True, allows arrays without items schema
+            allow_undefined_type: If True, allows schemas without an explicit type
+            populate_by_name: If True, allows population of model fields by name and alias
+            _schema_ref: Internal parameter to track the original $ref of the schema
 
         Returns:
             A Pydantic model class
@@ -226,8 +231,15 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
             )
             model_field_name, alias = self._sanitize_field_name(field_name)
+            if model_field_name in fields:
+                raise SchemaError(
+                    f"Duplicate field name after sanitization: '{model_field_name}'\nPydantic does "
+                    "not support field names starting with underscores when another field would "
+                    "result in the same name."
+                )
             field_info = self._build_field_info(field_schema, field_name in required, alias=alias)
             fields[model_field_name] = (field_type, field_info)
 
@@ -453,6 +465,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Resolves the Python type for a field schema."""
         # Store the original ref if present
@@ -522,6 +535,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
             )
 
             if field_schema.get("uniqueItems", False):
@@ -537,6 +551,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
                 _schema_ref=original_ref,
             )
 
@@ -557,10 +572,11 @@ class PydanticModelBuilder(IModelBuilder[T]):
         )
 
     def _build_field_info(
-            self,
-            field_schema: Dict[str, Any],
-            required: bool,
-            alias: Optional[str] = None, ) -> Field:
+        self,
+        field_schema: Dict[str, Any],
+        required: bool,
+        alias: Optional[str] = None,
+    ) -> Field:
         """Creates a Pydantic Field with constraints from schema.
         If the field_name is invalid as a model field name, it adds the original name as an alias.
         """
@@ -587,7 +603,6 @@ class PydanticModelBuilder(IModelBuilder[T]):
         if alias:
             field_kwargs["alias"] = alias
 
-
         # Extract field-level json_schema_extra
         field_extra = {
             key: value
@@ -600,7 +615,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         return Field(**field_kwargs)
 
-    def _sanitize_field_name(self, field_name: str) -> (str, Optional[str]):
+    def _sanitize_field_name(self, field_name: str) -> tuple[str, Optional[str]]:
         """Sanitizes field names to be valid Pydantic field names.
         Returns the sanitized field name and an optional alias if the name was changed.
         """
