@@ -462,6 +462,35 @@ def test_model_with_underscore_property(populate_by_name):
     with pytest.raises(ValueError):
         model(age=25)
 
+
+def test_nested_model_with_underscore_property():
+    """Test nested model creation with properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "user": {
+                "type": "object",
+                "properties": {
+                    "_name": {"type": "string"},
+                    "address": {
+                        "type": "object",
+                        "properties": {"_street": {"type": "string"}},
+                    },
+                },
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema)
+    instance = model(user={"_name": "John", "address": {"_street": "Main St"}})
+
+    assert isinstance(instance.user, BaseModel)
+    assert isinstance(instance.user.address, BaseModel)
+    assert instance.user.name == "John"
+    assert instance.user.address.street == "Main St"
+
+
 def test_model_with_underscore_collision():
     """Test model creation with properties that collide after removing underscore."""
     builder = PydanticModelBuilder()
