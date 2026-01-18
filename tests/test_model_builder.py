@@ -1,5 +1,5 @@
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 # Explicitly import custom TypeError with an alias
 from json_schema_to_pydantic.exceptions import TypeError as JsonSchemaTypeError
@@ -423,3 +423,45 @@ def test_json_schema_extra_with_user_example():
     # Test model functionality
     instance = A_recon(v=42)
     assert instance.v == 42
+
+
+@pytest.mark.parametrize("populate_by_name", [True, False])
+def test_model_with_underscore_property(populate_by_name):
+    """Test model creation with properties that start with an underscore."""
+    builder = PydanticModelBuilder(base_model_type=CustomBaseModel)
+    schema = {
+        "title": "TestModel",
+        "description": "A test model",
+        "type": "object",
+        "properties": {"_name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["_name"],
+    }
+
+    model = builder.create_pydantic_model(
+        schema,
+        CustomBaseModel,
+        populate_by_name=populate_by_name,
+    )
+
+    assert model.__name__ == "TestModel"
+    assert model.__doc__ == "A test model"
+    assert issubclass(model, CustomBaseModel)
+
+    # Test instance creation
+    instance = model(_name="test", age=25)
+    assert instance.name == "test"
+    assert instance.age == 25
+    assert instance.model_dump(by_alias=True) == {"_name": "test", "age": 25, "test_case": "test"}
+
+    if populate_by_name:
+        instance = model(name="test2", age=30)
+        assert instance.name == "test2"
+        assert instance.age == 30
+        assert instance.model_dump(by_alias=True) == {"_name": "test2", "age": 30, "test_case": "test"}
+    else:
+        with pytest.raises(ValidationError, match="1 validation error for TestModel\n_name"):
+            model(name="test", age=25)
+
+    # Test required field validation
+    with pytest.raises(ValueError):
+        model(age=25)

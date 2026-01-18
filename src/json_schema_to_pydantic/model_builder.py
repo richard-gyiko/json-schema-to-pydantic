@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Optional, Set, Type, TypeVar
 
-from pydantic import BaseModel, Field, RootModel, create_model, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
 
 from .builders import ConstraintBuilder
 from .handlers import CombinerHandler
@@ -106,9 +106,10 @@ class PydanticModelBuilder(IModelBuilder[T]):
     def create_pydantic_model(
         self,
         schema: Dict[str, Any],
-        root_schema: Optional[Dict[str, Any]] = None,
+        root_schema: Optional[Dict[str, Any] | Type[BaseModel]] = None,
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
         _schema_ref: Optional[str] = None,
     ) -> Type[T]:
         """
@@ -226,18 +227,27 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 allow_undefined_array_items,
                 allow_undefined_type,
             )
-            field_info = self._build_field_info(field_schema, field_name in required)
-            fields[field_name] = (field_type, field_info)
+            model_field_name, alias = self._sanitize_field_name(field_name)
+            field_info = self._build_field_info(field_schema, field_name in required, alias=alias)
+            fields[model_field_name] = (field_type, field_info)
 
         # Create the model with or without json_schema_extra
         if model_extra:
             # Create a dynamic base class with the config
             class DynamicBase(self.base_model_type):
-                model_config = ConfigDict(json_schema_extra=model_extra)
+                model_config = ConfigDict(
+                    json_schema_extra=model_extra,
+                    populate_by_name=populate_by_name,
+                )
 
             model = create_model(title, __base__=DynamicBase, **fields)
         else:
-            model = create_model(title, __base__=self.base_model_type, **fields)
+            model = create_model(
+                title,
+                __base__=self.base_model_type,
+                __config__=ConfigDict(populate_by_name=populate_by_name),
+                **fields,
+            )
 
         if description:
             model.__doc__ = description
@@ -546,8 +556,14 @@ class PydanticModelBuilder(IModelBuilder[T]):
             allow_undefined_type=allow_undefined_type,
         )
 
-    def _build_field_info(self, field_schema: Dict[str, Any], required: bool) -> Field:
-        """Creates a Pydantic Field with constraints from schema."""
+    def _build_field_info(
+            self,
+            field_schema: Dict[str, Any],
+            required: bool,
+            alias: Optional[str] = None, ) -> Field:
+        """Creates a Pydantic Field with constraints from schema.
+        If the field_name is invalid as a model field name, it adds the original name as an alias.
+        """
         field_kwargs = {}
 
         # Add constraints
@@ -567,6 +583,11 @@ class PydanticModelBuilder(IModelBuilder[T]):
         elif not required:
             field_kwargs["default"] = None
 
+        # Handle alias
+        if alias:
+            field_kwargs["alias"] = alias
+
+
         # Extract field-level json_schema_extra
         field_extra = {
             key: value
@@ -578,3 +599,12 @@ class PydanticModelBuilder(IModelBuilder[T]):
             field_kwargs["json_schema_extra"] = field_extra
 
         return Field(**field_kwargs)
+
+    def _sanitize_field_name(self, field_name: str) -> (str, Optional[str]):
+        """Sanitizes field names to be valid Pydantic field names.
+        Returns the sanitized field name and an optional alias if the name was changed.
+        """
+        # If the sanitized name is different, return the alias
+        if field_name.startswith("_"):
+            return field_name[1:], field_name
+        return field_name, None
