@@ -504,3 +504,64 @@ def test_model_with_underscore_collision():
 
     with pytest.raises(SchemaError, match="Duplicate field name after sanitization: 'name'"):
         builder.create_pydantic_model(schema)
+
+
+def test_model_with_one_of_combiner_with_underscore_property():
+    """Test model creation with combiners and properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "mixed_field": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "_type": {"const": "a"},
+                            "value": {"type": "string"},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "_type": {"const": "b"},
+                            "value": {"type": "integer"},
+                        },
+                    },
+                ]
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema, populate_by_name=True)
+
+    # Test both variants
+    instance1 = model(mixed_field={"_type": "a", "value": "test"})
+    instance2 = model(mixed_field={"_type": "b", "value": 42})
+
+    assert instance1.mixed_field.type == "a"
+    assert instance1.mixed_field.value == "test"
+    assert instance2.mixed_field.type == "b"
+    assert instance2.mixed_field.value == 42
+
+
+def test_model_with_all_of_combiner_with_underscore_property():
+    """Test model creation with allOf combiners and properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "combined_field": {
+                "allOf": [
+                    {"type": "object", "properties": {"_name": {"type": "string"}}},
+                    {"type": "object", "properties": {"age": {"type": "integer"}}}
+                ]
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema, populate_by_name=True)
+
+    instance = model(combined_field={"_name": "Alice", "age": 30})
+    assert instance.combined_field.name == "Alice"
+    assert instance.combined_field.age == 30

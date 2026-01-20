@@ -14,6 +14,7 @@ class ITypeResolver(ABC):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Resolves JSON Schema types to Pydantic types"""
         pass
@@ -34,6 +35,7 @@ class ICombinerHandler(ABC):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Handles allOf combiner"""
         pass
@@ -45,6 +47,7 @@ class ICombinerHandler(ABC):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Handles anyOf combiner"""
         pass
@@ -56,6 +59,7 @@ class ICombinerHandler(ABC):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Handles oneOf combiner"""
         pass
@@ -78,6 +82,7 @@ class IModelBuilder(ABC, Generic[T]):
         root_schema: Optional[Dict[str, Any]] = None,
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Type[T]:
         """Creates a Pydantic model from JSON Schema"""
         pass

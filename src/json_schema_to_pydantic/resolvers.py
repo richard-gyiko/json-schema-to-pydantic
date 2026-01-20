@@ -12,7 +12,12 @@ class TypeResolver(ITypeResolver):
     """Resolves JSON Schema types to Pydantic types"""
 
     def resolve_type(
-        self, schema: dict, root_schema: dict, allow_undefined_array_items: bool = False, allow_undefined_type: bool = False
+        self,
+        schema: dict,
+        root_schema: dict,
+        allow_undefined_array_items: bool = False,
+        allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Get the Pydantic field type for a JSON schema field."""
         if not isinstance(schema, dict):

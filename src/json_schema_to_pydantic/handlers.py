@@ -28,6 +28,7 @@ class CombinerHandler(ICombinerHandler):
         reference_resolver: IReferenceResolver,
         recursive_field_builder: Callable,
         field_info_builder: Callable,
+        name_sanitizer: Callable,
     ):
         # Store injected dependencies
         self.type_resolver = type_resolver
@@ -36,6 +37,7 @@ class CombinerHandler(ICombinerHandler):
         # Store callbacks for recursive building
         self.recursive_field_builder = recursive_field_builder
         self.field_info_builder = field_info_builder
+        self.name_sanitizer = name_sanitizer
 
     def handle_all_of(
         self,
@@ -43,6 +45,7 @@ class CombinerHandler(ICombinerHandler):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Type[BaseModel]:
         """Combines multiple schemas with AND logic."""
         if not schemas:
@@ -80,18 +83,20 @@ class CombinerHandler(ICombinerHandler):
         # Build field definitions using the callbacks
         field_definitions = {}
         for name, prop_schema in merged_properties.items():
+            sanitized_name, alias = self.name_sanitizer(name, set(merged_properties))
             field_type = self.recursive_field_builder(
                 prop_schema,
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
             )
-            field_info = self.field_info_builder(prop_schema, name in required_fields)
-            field_definitions[name] = (field_type, field_info)
+            field_info = self.field_info_builder(prop_schema, name in required_fields, alias=alias)
+            field_definitions[sanitized_name] = (field_type, field_info)
 
         return create_model(
             "AllOfModel",
-            __config__=ConfigDict(extra="forbid"),
+            __config__=ConfigDict(extra="forbid", populate_by_name=populate_by_name),
             **field_definitions,
         )
 
@@ -101,6 +106,7 @@ class CombinerHandler(ICombinerHandler):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """Allows validation against any of the given schemas."""
         if not schemas:
@@ -119,7 +125,11 @@ class CombinerHandler(ICombinerHandler):
 
             # Use the recursive_field_builder callback to resolve the type
             resolved_type = self.recursive_field_builder(
-                schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
+                populate_by_name,
             )
             possible_types.append(resolved_type)
 
@@ -131,6 +141,7 @@ class CombinerHandler(ICombinerHandler):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool = False,
         allow_undefined_type: bool = False,
+        populate_by_name: bool = False,
     ) -> Any:
         """
         Handles oneOf schema combiner with support for multiple patterns:
@@ -157,13 +168,21 @@ class CombinerHandler(ICombinerHandler):
         # Check for discriminated union pattern (objects with type const)
         if self._is_discriminated_union(schemas, root_schema):
             return self._handle_discriminated_union(
-                schemas, root_schema, allow_undefined_array_items, allow_undefined_type
+                schemas,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
+                populate_by_name,
             )
 
         # Fallback: treat as general union (like anyOf)
         # This handles simple type unions, refs without discriminators, and mixed schemas
         return self._handle_union(
-            schemas, root_schema, allow_undefined_array_items, allow_undefined_type
+            schemas,
+            root_schema,
+            allow_undefined_array_items,
+            allow_undefined_type,
+            populate_by_name,
         )
 
     def _is_discriminated_union(
@@ -195,6 +214,7 @@ class CombinerHandler(ICombinerHandler):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool,
         allow_undefined_type: bool,
+        populate_by_name: bool,
     ) -> Type[BaseModel]:
         """Handle oneOf with discriminated union pattern (objects with type const)."""
         variant_models = {}
@@ -226,23 +246,27 @@ class CombinerHandler(ICombinerHandler):
                         Field(default=type_const, description=description),
                     )
                 elif "oneOf" in prop_schema:
+                    sanitized_name, alias = self.name_sanitizer(name, set(properties))
                     field_type = self.recursive_field_builder(
                         prop_schema,
                         root_schema,
                         allow_undefined_array_items,
                         allow_undefined_type,
+                        populate_by_name,
                     )
-                    field_info = self.field_info_builder(prop_schema, name in required)
-                    fields[name] = (field_type, field_info)
+                    field_info = self.field_info_builder(prop_schema, name in required, alias=alias)
+                    fields[sanitized_name] = (field_type, field_info)
                 elif name != "type":
+                    sanitized_name, alias = self.name_sanitizer(name, set(properties))
                     field_type = self.recursive_field_builder(
                         prop_schema,
                         root_schema,
                         allow_undefined_array_items,
                         allow_undefined_type,
+                        populate_by_name,
                     )
-                    field_info = self.field_info_builder(prop_schema, name in required)
-                    fields[name] = (field_type, field_info)
+                    field_info = self.field_info_builder(prop_schema, name in required, alias=alias)
+                    fields[sanitized_name] = (field_type, field_info)
 
             # Use the name from the $ref if available, otherwise generate one
             if ref_path:
@@ -251,7 +275,9 @@ class CombinerHandler(ICombinerHandler):
                 model_name = f"Variant_{type_const}"
 
             variant_model = create_model(
-                model_name, __config__=ConfigDict(extra="forbid"), **fields
+                model_name,
+                __config__=ConfigDict(extra="forbid", populate_by_name=populate_by_name),
+                **fields,
             )
             variant_models[type_const] = variant_model
 
@@ -271,6 +297,7 @@ class CombinerHandler(ICombinerHandler):
         root_schema: Dict[str, Any],
         allow_undefined_array_items: bool,
         allow_undefined_type: bool,
+        populate_by_name: bool,
     ) -> Any:
         """Handle oneOf as a union type (like anyOf)."""
         possible_types = []
@@ -280,7 +307,11 @@ class CombinerHandler(ICombinerHandler):
 
             # Let recursive_field_builder handle $ref resolution
             resolved_type = self.recursive_field_builder(
-                schema, root_schema, allow_undefined_array_items, allow_undefined_type
+                schema,
+                root_schema,
+                allow_undefined_array_items,
+                allow_undefined_type,
+                populate_by_name,
             )
             possible_types.append(resolved_type)
 

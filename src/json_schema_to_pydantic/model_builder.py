@@ -97,6 +97,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
             reference_resolver=self.reference_resolver,
             recursive_field_builder=self._get_field_type,
             field_info_builder=self._build_field_info,
+            name_sanitizer=self._sanitize_field_name,
         )
         self.base_model_type = base_model_type
         # Track models being built to handle recursive references
@@ -157,6 +158,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
             )
         if "anyOf" in schema:
             return self.combiner_handler.handle_any_of(
@@ -164,6 +166,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name,
             )
         if "oneOf" in schema:
             return self.combiner_handler.handle_one_of(
@@ -171,6 +174,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
+                populate_by_name
             )
 
         # Handle top-level arrays
@@ -233,13 +237,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 allow_undefined_type,
                 populate_by_name,
             )
-            model_field_name, alias = self._sanitize_field_name(field_name)
-            if model_field_name in fields:
-                raise SchemaError(
-                    f"Duplicate field name after sanitization: '{model_field_name}'\nPydantic does "
-                    "not support field names starting with underscores when another field would "
-                    "result in the same name."
-                )
+            model_field_name, alias = self._sanitize_field_name(field_name, set(properties))
             field_info = self._build_field_info(field_schema, field_name in required, alias=alias)
             fields[model_field_name] = (field_type, field_info)
 
@@ -615,11 +613,20 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         return Field(**field_kwargs)
 
-    def _sanitize_field_name(self, field_name: str) -> tuple[str, Optional[str]]:
+    @staticmethod
+    def _sanitize_field_name(field_name: str, invalid_names: set) -> tuple[str, Optional[str]]:
         """Sanitizes field names to be valid Pydantic field names.
         Returns the sanitized field name and an optional alias if the name was changed.
         """
         # If the sanitized name is different, return the alias
+        sanitized_name = field_name
+        alias = None
         if field_name.startswith("_"):
-            return field_name[1:], field_name
-        return field_name, None
+            sanitized_name, alias = field_name[1:], field_name
+            if sanitized_name in invalid_names:
+                raise SchemaError(
+                    f"Duplicate field name after sanitization: '{sanitized_name}'\nPydantic does "
+                    "not support field names starting with underscores when another field would "
+                    "result in the same name."
+                )
+        return sanitized_name, alias
