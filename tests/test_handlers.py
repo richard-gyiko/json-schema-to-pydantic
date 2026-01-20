@@ -1,8 +1,9 @@
 from typing import Union
 
 import pytest
-from pydantic import BaseModel, Field, RootModel, create_model
+from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
 
+from json_schema_to_pydantic import PydanticModelBuilder
 from json_schema_to_pydantic.builders import ConstraintBuilder
 from json_schema_to_pydantic.exceptions import CombinerError
 from json_schema_to_pydantic.handlers import CombinerHandler
@@ -19,7 +20,11 @@ def create_handler():
     # Define simple callbacks for testing purposes
     # Note: These might need adjustment if tests require full model building recursion
     def simple_recursive_builder(
-        schema, root_schema, allow_undefined_array_items=False, allow_any_type=False
+        schema,
+        root_schema,
+        allow_undefined_array_items=False,
+        allow_any_type=False,
+        populate_by_name=False,
     ):
         # Resolve $ref first, similar to PydanticModelBuilder._get_field_type
         if "$ref" in schema:
@@ -39,7 +44,11 @@ def create_handler():
                 )
                 for n, p in props.items()
             }
-            return create_model("NestedTestModel", **fields)
+            return create_model(
+                "NestedTestModel",
+                __config__=ConfigDict(populate_by_name=populate_by_name),
+                **fields,
+            )
         elif "oneOf" in schema:
             # Delegate back to a temporary handler instance for nested oneOf
             # This is a bit complex for a simple test setup, might need refinement
@@ -49,9 +58,14 @@ def create_handler():
                 reference_resolver,
                 simple_recursive_builder,
                 simple_field_info_builder,
+                PydanticModelBuilder._sanitize_field_name,
             )
             return temp_handler.handle_one_of(
-                schema["oneOf"], root_schema, allow_undefined_array_items
+                schema["oneOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_any_type,
+                populate_by_name,
             )
         elif "anyOf" in schema:
             temp_handler = CombinerHandler(
@@ -62,14 +76,18 @@ def create_handler():
                 simple_field_info_builder,
             )
             return temp_handler.handle_any_of(
-                schema["anyOf"], root_schema, allow_undefined_array_items
+                schema["anyOf"],
+                root_schema,
+                allow_undefined_array_items,
+                allow_any_type,
+                populate_by_name,
             )
         # Fallback to basic type resolver
         return type_resolver.resolve_type(
-            schema, root_schema, allow_undefined_array_items
+            schema, root_schema, allow_undefined_array_items, allow_any_type, populate_by_name
         )
 
-    def simple_field_info_builder(schema, required):
+    def simple_field_info_builder(schema, required, alias=None):
         # Basic field info creation for testing
         kwargs = {}
         constraints = constraint_builder.build_constraints(schema)
@@ -81,6 +99,8 @@ def create_handler():
             kwargs["default"] = None
         if "description" in schema:
             kwargs["description"] = schema["description"]
+        if alias:
+            kwargs["alias"] = alias
         return Field(**kwargs)
 
     # Return the handler instance with dependencies and callbacks
@@ -90,6 +110,7 @@ def create_handler():
         reference_resolver=reference_resolver,
         recursive_field_builder=simple_recursive_builder,
         field_info_builder=simple_field_info_builder,
+        name_sanitizer=PydanticModelBuilder._sanitize_field_name,
     )
 
 
@@ -803,3 +824,106 @@ def test_one_of_const_with_mixed_valid_types():
     from typing import get_args
 
     assert get_args(literal_type) == ("string_value", 42, True, None)
+
+
+def test_one_of_populate_by_name():
+    """Test oneOf handler with populate_by_name=True."""
+    handler = create_handler()
+
+    schema = {
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "type": {"const": "user"},
+                    "username": {"type": "string", "alias": "user_name"},
+                },
+                "required": ["type", "username"],
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "type": {"const": "admin"},
+                    "admin_level": {"type": "integer", "alias": "adminLevel"},
+                },
+                "required": ["type", "admin_level"],
+            },
+        ]
+    }
+
+    model = handler.handle_one_of(
+        schema["oneOf"],
+        {},
+        populate_by_name=True,
+    )
+
+    from typing import get_args
+
+    types = get_args(model.model_fields["root"].annotation)[0].__args__
+    assert len(types) == 2
+    assert types[0].model_config["populate_by_name"] is True
+    assert types[1].model_config["populate_by_name"] is True
+
+
+def test_all_of_populate_by_name():
+    """Test allOf handler with populate_by_name=True."""
+    handler = create_handler()
+
+    schemas = [
+        {
+            "type": "object",
+            "properties": {
+                "first_name": {"type": "string", "alias": "firstName"},
+                "last_name": {"type": "string", "alias": "lastName"},
+            },
+            "required": ["first_name", "last_name"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "age": {"type": "integer", "alias": "userAge"},
+            },
+            "required": ["age"],
+        },
+    ]
+
+    model = handler.handle_all_of(
+        schemas,
+        {},
+        populate_by_name=True,
+    )
+
+    assert model.model_config["populate_by_name"] is True
+
+
+def test_any_of_populate_by_name():
+    """Test anyOf handler with populate_by_name=True."""
+    handler = create_handler()
+
+    schemas = [
+        {
+            "type": "object",
+            "properties": {
+                "email_address": {"type": "string", "alias": "emailAddress"},
+            },
+        },
+        {
+            "type": "object",
+            "properties": {
+                "phone_number": {"type": "string", "alias": "phoneNumber"},
+            },
+        },
+    ]
+
+    union_type = handler.handle_any_of(
+        schemas,
+        {},
+        populate_by_name=True,
+    )
+
+    from typing import get_args
+
+    types = get_args(union_type)
+    assert len(types) == 2
+    assert types[0].model_config["populate_by_name"] is True
+    assert types[1].model_config["populate_by_name"] is True
