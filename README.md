@@ -15,6 +15,8 @@ A Python library for automatically generating Pydantic v2 models from JSON Schem
   - Type constraints and validations
   - Array and object validations
   - Format validations (email, uri, uuid, date-time)
+  - Top-level arrays and scalar types (not just objects)
+  - Underscore-prefixed fields (common in OpenAPI specs)
 - Full type hinting support
 - Clean, simple API
 
@@ -83,6 +85,18 @@ RelaxedModel = create_model(
 relaxed_instance = RelaxedModel(
     tags=[1, "two", True],
     metadata={"custom": "data"}
+)
+
+# Example with underscore-prefixed fields (common in OpenAPI)
+OpenAPIModel = create_model(
+    {
+        "type": "object",
+        "properties": {
+            "_links": {"type": "object"},
+            "_embedded": {"type": "object"}
+        }
+    },
+    populate_by_name=True  # Allows access via both '_links' and 'links'
 )
 ```
 

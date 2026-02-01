@@ -202,3 +202,100 @@ Example with nested references in array items:
 - `additionalProperties` defaults to False
 - `patternProperties` not supported
 - `if`/`then`/`else` not supported
+
+## Top-Level Arrays and Scalars
+
+The library supports schemas where the root type is not an object. This includes arrays and scalar types.
+
+### Top-Level Arrays
+
+Schemas with `"type": "array"` at the root are converted to Pydantic `RootModel`:
+
+```python
+from json_schema_to_pydantic import create_model
+
+schema = {
+    "type": "array",
+    "items": {"type": "string"}
+}
+
+StringList = create_model(schema)
+instance = StringList(["a", "b", "c"])
+print(instance.root)  # ['a', 'b', 'c']
+```
+
+### Scalar Root Types
+
+Schemas with scalar types (`string`, `integer`, `number`, `boolean`) at the root are also supported:
+
+```python
+schema = {"type": "integer", "minimum": 0}
+PositiveInt = create_model(schema)
+instance = PositiveInt(42)
+print(instance.root)  # 42
+```
+
+## Underscore-Prefixed Fields
+
+JSON schemas from OpenAPI specs often contain fields starting with underscores (e.g., `_links`, `_embedded`). Since Pydantic doesn't allow field names starting with `_`, the library automatically:
+
+1. Strips the leading underscore from the field name
+2. Adds the original name as an alias
+3. Optionally enables `populate_by_name` for flexible instantiation
+
+```python
+from json_schema_to_pydantic import create_model
+
+schema = {
+    "type": "object",
+    "properties": {
+        "_name": {"type": "string"},
+        "age": {"type": "integer"}
+    },
+    "required": ["_name"]
+}
+
+# With populate_by_name=True, you can use either name
+Model = create_model(schema, populate_by_name=True)
+
+# Both of these work:
+instance1 = Model(_name="John", age=30)  # Using alias (original name)
+instance2 = Model(name="John", age=30)   # Using field name
+
+# Serialization preserves the original names
+print(instance1.model_dump(by_alias=True))  # {"_name": "John", "age": 30}
+```
+
+### Collision Detection
+
+If sanitizing a field name would create a duplicate (e.g., both `_name` and `name` exist), a `SchemaError` is raised:
+
+```python
+schema = {
+    "type": "object",
+    "properties": {
+        "_name": {"type": "string"},
+        "name": {"type": "string"}  # Collision!
+    }
+}
+
+# Raises SchemaError: Duplicate field name after sanitization: 'name'
+Model = create_model(schema)
+```
+
+### Combiner Support
+
+Underscore field handling works with all schema combiners (`allOf`, `anyOf`, `oneOf`):
+
+```python
+schema = {
+    "allOf": [
+        {"type": "object", "properties": {"_id": {"type": "string"}}},
+        {"type": "object", "properties": {"name": {"type": "string"}}}
+    ]
+}
+
+Model = create_model(schema, populate_by_name=True)
+instance = Model(_id="123", name="Test")
+print(instance.id)  # "123"
+```
