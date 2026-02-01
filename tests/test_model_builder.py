@@ -1,8 +1,8 @@
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 # Explicitly import custom TypeError with an alias
-from json_schema_to_pydantic.exceptions import TypeError as JsonSchemaTypeError
+from json_schema_to_pydantic.exceptions import SchemaError, TypeError as JsonSchemaTypeError
 from json_schema_to_pydantic.model_builder import PydanticModelBuilder
 
 
@@ -423,3 +423,145 @@ def test_json_schema_extra_with_user_example():
     # Test model functionality
     instance = A_recon(v=42)
     assert instance.v == 42
+
+
+@pytest.mark.parametrize("populate_by_name", [True, False])
+def test_model_with_underscore_property(populate_by_name):
+    """Test model creation with properties that start with an underscore."""
+    builder = PydanticModelBuilder(base_model_type=CustomBaseModel)
+    schema = {
+        "title": "TestModel",
+        "description": "A test model",
+        "type": "object",
+        "properties": {"_name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["_name"],
+    }
+
+    model = builder.create_pydantic_model(schema, populate_by_name=populate_by_name)
+
+    assert model.__name__ == "TestModel"
+    assert model.__doc__ == "A test model"
+    assert issubclass(model, CustomBaseModel)
+
+    # Test instance creation
+    instance = model(_name="test", age=25)
+    assert instance.name == "test"
+    assert instance.age == 25
+    assert instance.model_dump(by_alias=True) == {"_name": "test", "age": 25, "test_case": "test"}
+
+    if populate_by_name:
+        instance = model(name="test2", age=30)
+        assert instance.name == "test2"
+        assert instance.age == 30
+        assert instance.model_dump(by_alias=True) == {"_name": "test2", "age": 30, "test_case": "test"}
+    else:
+        with pytest.raises(ValidationError, match="1 validation error for TestModel\n_name"):
+            model(name="test", age=25)
+
+    # Test required field validation
+    with pytest.raises(ValueError):
+        model(age=25)
+
+
+def test_nested_model_with_underscore_property():
+    """Test nested model creation with properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "user": {
+                "type": "object",
+                "properties": {
+                    "_name": {"type": "string"},
+                    "address": {
+                        "type": "object",
+                        "properties": {"_street": {"type": "string"}},
+                    },
+                },
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema)
+    instance = model(user={"_name": "John", "address": {"_street": "Main St"}})
+
+    assert isinstance(instance.user, BaseModel)
+    assert isinstance(instance.user.address, BaseModel)
+    assert instance.user.name == "John"
+    assert instance.user.address.street == "Main St"
+
+
+def test_model_with_underscore_collision():
+    """Test model creation with properties that collide after removing underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "title": "CollisionModel",
+        "description": "A model with colliding properties",
+        "type": "object",
+        "properties": {"_name": {"type": "string"}, "name": {"type": "string"}},
+        "required": ["_name", "name"],
+    }
+
+    with pytest.raises(SchemaError, match="Duplicate field name after sanitization: 'name'"):
+        builder.create_pydantic_model(schema)
+
+
+def test_model_with_one_of_combiner_with_underscore_property():
+    """Test model creation with combiners and properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "mixed_field": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "_type": {"const": "a"},
+                            "value": {"type": "string"},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "_type": {"const": "b"},
+                            "value": {"type": "integer"},
+                        },
+                    },
+                ]
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema, populate_by_name=True)
+
+    # Test both variants
+    instance1 = model(mixed_field={"_type": "a", "value": "test"})
+    instance2 = model(mixed_field={"_type": "b", "value": 42})
+
+    assert instance1.mixed_field.type == "a"
+    assert instance1.mixed_field.value == "test"
+    assert instance2.mixed_field.type == "b"
+    assert instance2.mixed_field.value == 42
+
+
+def test_model_with_all_of_combiner_with_underscore_property():
+    """Test model creation with allOf combiners and properties that start with an underscore."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "combined_field": {
+                "allOf": [
+                    {"type": "object", "properties": {"_name": {"type": "string"}}},
+                    {"type": "object", "properties": {"age": {"type": "integer"}}}
+                ]
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema, populate_by_name=True)
+
+    instance = model(combined_field={"_name": "Alice", "age": 30})
+    assert instance.combined_field.name == "Alice"
+    assert instance.combined_field.age == 30
