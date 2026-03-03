@@ -104,15 +104,19 @@ class PydanticModelBuilder(IModelBuilder[T]):
             name_sanitizer=self._sanitize_field_name,
         )
         self.base_model_type = base_model_type
-        validated_predefined_models = self._validate_predefined_models(predefined_models)
+        validated_predefined_models = self._validate_predefined_models(
+            predefined_models,
+            base_model_type=self.base_model_type,
+        )
         # Track models being built to handle recursive references
         self._model_cache: Dict[str, Type[BaseModel]] = dict(validated_predefined_models)
         self._building_models: Set[str] = set()
         self._models_to_rebuild: Set[Type[BaseModel]] = set()
 
-    @staticmethod
     def _validate_predefined_models(
+        self,
         predefined_models: Optional[Dict[str, Type[BaseModel]]],
+        base_model_type: Type[T],
     ) -> Dict[str, Type[BaseModel]]:
         """Validate and normalize predefined model mappings for $ref resolution."""
         if predefined_models is None:
@@ -130,10 +134,22 @@ class PydanticModelBuilder(IModelBuilder[T]):
                     f"'{ref}'. Keys must be local JSON Pointer refs like "
                     "'#/definitions/Model'"
                 )
+            path = ref[2:]
+            if not path or any(segment == "" for segment in path.split("/")):
+                raise ValueError(
+                    "Invalid predefined model ref "
+                    f"'{ref}'. Keys must be local JSON Pointer refs without empty path segments, "
+                    "for example '#/definitions/Model'"
+                )
 
             if not isinstance(model, type) or not issubclass(model, BaseModel):
                 raise ValueError(
                     f"Invalid predefined model for ref '{ref}'. Values must be subclasses of pydantic.BaseModel"
+                )
+            if not issubclass(model, base_model_type):
+                raise ValueError(
+                    f"Invalid predefined model for ref '{ref}'. Values must be subclasses of the configured "
+                    f"base_model_type ({base_model_type.__name__})"
                 )
             validated[ref] = model
         return validated

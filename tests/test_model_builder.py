@@ -182,9 +182,31 @@ def test_predefined_models_validation_requires_local_ref_keys():
         PydanticModelBuilder(predefined_models={"http://example.com/Pet": BaseModel})
 
 
+def test_predefined_models_validation_rejects_empty_pointer_segments():
+    with pytest.raises(ValueError, match="without empty path segments"):
+        PydanticModelBuilder(predefined_models={"#/": BaseModel})
+
+    with pytest.raises(ValueError, match="without empty path segments"):
+        PydanticModelBuilder(predefined_models={"#/definitions//Pet": BaseModel})
+
+
 def test_predefined_models_validation_requires_basemodel_subclasses():
     with pytest.raises(ValueError, match="must be subclasses of pydantic.BaseModel"):
         PydanticModelBuilder(predefined_models={"#/definitions/Pet": str})
+
+
+def test_predefined_models_validation_requires_subclass_of_configured_base_model_type():
+    class CustomBase(BaseModel):
+        base_field: str = "x"
+
+    class DifferentBase(BaseModel):
+        pass
+
+    with pytest.raises(ValueError, match="must be subclasses of the configured base_model_type"):
+        PydanticModelBuilder(
+            base_model_type=CustomBase,
+            predefined_models={"#/definitions/Pet": DifferentBase},
+        )
 
 
 def test_predefined_models_validation_requires_mapping():
