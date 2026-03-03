@@ -196,6 +196,44 @@ Example with nested references in array items:
 }
 ```
 
+### Reusing Existing Pydantic Models for `$ref`
+
+If your application already has canonical Pydantic models, you can pre-seed
+reference resolution so matched refs reuse those classes:
+
+```python
+from pydantic import BaseModel
+from json_schema_to_pydantic import create_model
+
+class PetModel(BaseModel):
+    name: str
+    type: str
+
+schema = {
+    "type": "object",
+    "properties": {"current_pet": {"$ref": "#/definitions/Pet"}},
+    "definitions": {
+        "Pet": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "type": {"type": "string"}},
+        }
+    },
+}
+
+Model = create_model(
+    schema,
+    predefined_models={"#/definitions/Pet": PetModel},
+)
+instance = Model(current_pet={"name": "Fluffy", "type": "cat"})
+assert type(instance.current_pet) is PetModel
+```
+
+Notes:
+- `predefined_models` keys must be local JSON Pointer refs such as
+  `#/definitions/Pet` or `#/$defs/Pet`.
+- Values must be subclasses of `pydantic.BaseModel`.
+- Exact ref-key matches take precedence over generated models.
+
 ## Limitations
 
 - External references are not supported

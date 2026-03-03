@@ -85,7 +85,11 @@ class PydanticModelBuilder(IModelBuilder[T]):
         "uniqueItems",
     }
 
-    def __init__(self, base_model_type: Type[T] = BaseModel):
+    def __init__(
+        self,
+        base_model_type: Type[T] = BaseModel,
+        predefined_models: Optional[Dict[str, Type[BaseModel]]] = None,
+    ):
         # Instantiate resolvers and builders directly
         self.type_resolver = TypeResolver()
         self.constraint_builder = ConstraintBuilder()
@@ -100,10 +104,39 @@ class PydanticModelBuilder(IModelBuilder[T]):
             name_sanitizer=self._sanitize_field_name,
         )
         self.base_model_type = base_model_type
+        validated_predefined_models = self._validate_predefined_models(predefined_models)
         # Track models being built to handle recursive references
-        self._model_cache: Dict[str, Type[BaseModel]] = {}
+        self._model_cache: Dict[str, Type[BaseModel]] = dict(validated_predefined_models)
         self._building_models: Set[str] = set()
         self._models_to_rebuild: Set[Type[BaseModel]] = set()
+
+    @staticmethod
+    def _validate_predefined_models(
+        predefined_models: Optional[Dict[str, Type[BaseModel]]],
+    ) -> Dict[str, Type[BaseModel]]:
+        """Validate and normalize predefined model mappings for $ref resolution."""
+        if predefined_models is None:
+            return {}
+        if not isinstance(predefined_models, dict):
+            raise ValueError(
+                "predefined_models must be a dict mapping local $ref strings to BaseModel subclasses"
+            )
+
+        validated: Dict[str, Type[BaseModel]] = {}
+        for ref, model in predefined_models.items():
+            if not isinstance(ref, str) or not ref.startswith("#/"):
+                raise ValueError(
+                    "Invalid predefined model ref "
+                    f"'{ref}'. Keys must be local JSON Pointer refs like "
+                    "'#/definitions/Model'"
+                )
+
+            if not isinstance(model, type) or not issubclass(model, BaseModel):
+                raise ValueError(
+                    f"Invalid predefined model for ref '{ref}'. Values must be subclasses of pydantic.BaseModel"
+                )
+            validated[ref] = model
+        return validated
 
     def create_pydantic_model(
         self,
