@@ -131,6 +131,89 @@ def test_model_with_references():
     assert instance.current_pet.name == "Fluffy"
 
 
+def test_predefined_models_builder_reuses_definition_model():
+    class PetModel(BaseModel):
+        name: str
+        type: str
+
+    builder = PydanticModelBuilder(
+        predefined_models={"#/definitions/Pet": PetModel}
+    )
+    schema = {
+        "type": "object",
+        "properties": {"current_pet": {"$ref": "#/definitions/Pet"}},
+        "definitions": {
+            "Pet": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "type": {"type": "string"}},
+            }
+        },
+    }
+
+    model = builder.create_pydantic_model(schema)
+    instance = model(current_pet={"name": "Fluffy", "type": "cat"})
+    assert type(instance.current_pet) is PetModel
+
+
+def test_predefined_models_create_model_reuses_defs_model():
+    from json_schema_to_pydantic import create_model
+
+    class SharedType(BaseModel):
+        value: str
+
+    schema = {
+        "type": "object",
+        "properties": {"shared": {"$ref": "#/$defs/SharedType"}},
+        "$defs": {
+            "SharedType": {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+            }
+        },
+    }
+
+    model = create_model(schema, predefined_models={"#/$defs/SharedType": SharedType})
+    instance = model(shared={"value": "ok"})
+    assert type(instance.shared) is SharedType
+
+
+def test_predefined_models_validation_requires_local_ref_keys():
+    with pytest.raises(ValueError, match="Keys must be local JSON Pointer refs"):
+        PydanticModelBuilder(predefined_models={"http://example.com/Pet": BaseModel})
+
+
+def test_predefined_models_validation_rejects_empty_pointer_segments():
+    with pytest.raises(ValueError, match="without empty path segments"):
+        PydanticModelBuilder(predefined_models={"#/": BaseModel})
+
+    with pytest.raises(ValueError, match="without empty path segments"):
+        PydanticModelBuilder(predefined_models={"#/definitions//Pet": BaseModel})
+
+
+def test_predefined_models_validation_requires_basemodel_subclasses():
+    with pytest.raises(ValueError, match="must be subclasses of pydantic.BaseModel"):
+        PydanticModelBuilder(predefined_models={"#/definitions/Pet": str})
+
+
+def test_predefined_models_validation_requires_subclass_of_configured_base_model_type():
+    class CustomBase(BaseModel):
+        base_field: str = "x"
+
+    class DifferentBase(BaseModel):
+        pass
+
+    with pytest.raises(ValueError, match="must be subclasses of the configured base_model_type"):
+        PydanticModelBuilder(
+            base_model_type=CustomBase,
+            predefined_models={"#/definitions/Pet": DifferentBase},
+        )
+
+
+def test_predefined_models_validation_requires_mapping():
+    with pytest.raises(ValueError, match="predefined_models must be a dict"):
+        PydanticModelBuilder(predefined_models=[])  # type: ignore[arg-type]
+
+
 def test_model_with_combiners():
     """Test model creation with schema combiners."""
     builder = PydanticModelBuilder()

@@ -28,6 +28,7 @@ def create_model(
     allow_undefined_array_items: bool = False,
     allow_undefined_type: bool = False,
     populate_by_name: bool = False,
+    predefined_models: Optional[Dict[str, Type[BaseModel]]] = None,
 ) -> Type[T]:
     """
     Create a Pydantic model from a JSON Schema.
@@ -40,6 +41,9 @@ def create_model(
         allow_undefined_array_items: If True, allows arrays without items schema
         allow_undefined_type: If True, allows schemas without an explicit type
         populate_by_name: If True, allows population of model fields by name and alias
+        predefined_models: Optional mapping of local JSON Pointer refs
+            (e.g. "#/definitions/MyModel") to existing Pydantic model classes.
+            Matching refs are reused instead of generating new model classes.
 
     Returns:
         A Pydantic model class
@@ -50,7 +54,10 @@ def create_model(
         CombinerError: If there's an error in schema combiners
         ReferenceError: If there's an error resolving references
     """
-    builder = PydanticModelBuilder(base_model_type=base_model_type)
+    builder = PydanticModelBuilder(
+        base_model_type=base_model_type,
+        predefined_models=predefined_models,
+    )
     return builder.create_pydantic_model(
         schema,
         root_schema,

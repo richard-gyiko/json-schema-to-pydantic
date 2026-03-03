@@ -105,11 +105,22 @@ OpenAPIModel = create_model(
 For more complex scenarios, you can use the `PydanticModelBuilder` directly:
 
 ```python
+from pydantic import BaseModel
 from json_schema_to_pydantic import PydanticModelBuilder
 
-builder = PydanticModelBuilder()
+class PetModel(BaseModel):
+    name: str
+    type: str
+
+builder = PydanticModelBuilder(
+    predefined_models={"#/definitions/Pet": PetModel}
+)
 model = builder.create_pydantic_model(schema, root_schema)
 ```
+
+You can also pass `predefined_models` to `create_model(...)` directly.
+When a `$ref` key matches an entry in `predefined_models`, that class is reused
+instead of generating a new class.
 
 ## Error Handling
 
