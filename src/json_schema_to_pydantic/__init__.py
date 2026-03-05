@@ -29,6 +29,7 @@ def create_model(
     allow_undefined_type: bool = False,
     populate_by_name: bool = False,
     predefined_models: Optional[Dict[str, Type[BaseModel]]] = None,
+    predefined_refs: Optional[Dict[str, Any]] = None,
 ) -> Type[T]:
     """
     Create a Pydantic model from a JSON Schema.
@@ -44,6 +45,10 @@ def create_model(
         predefined_models: Optional mapping of local JSON Pointer refs
             (e.g. "#/definitions/MyModel") to existing Pydantic model classes.
             Matching refs are reused instead of generating new model classes.
+        predefined_refs: Optional mapping of local JSON Pointer refs
+            (e.g. "#/definitions/SomeType") to valid type annotations such as
+            list[str], dict[str, int], or TypeAliasType values. Matching refs
+            are reused as field types instead of generating new model classes.
 
     Returns:
         A Pydantic model class
@@ -57,6 +62,7 @@ def create_model(
     builder = PydanticModelBuilder(
         base_model_type=base_model_type,
         predefined_models=predefined_models,
+        predefined_refs=predefined_refs,
     )
     return builder.create_pydantic_model(
         schema,

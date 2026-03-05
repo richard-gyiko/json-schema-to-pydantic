@@ -1,5 +1,6 @@
 import pytest
 from pydantic import BaseModel, Field, ValidationError
+from typing_extensions import TypeAliasType
 
 # Explicitly import custom TypeError with an alias
 from json_schema_to_pydantic.exceptions import SchemaError, TypeError as JsonSchemaTypeError
@@ -177,6 +178,40 @@ def test_predefined_models_create_model_reuses_defs_model():
     assert type(instance.shared) is SharedType
 
 
+def test_predefined_refs_create_model_reuses_type_alias():
+    from json_schema_to_pydantic import create_model
+
+    some_type = TypeAliasType("SomeType", list[str])
+    schema = {
+        "type": "object",
+        "properties": {"some_value": {"$ref": "#/definitions/SomeType"}},
+        "definitions": {"SomeType": {"type": "array", "items": {"type": "string"}}},
+    }
+
+    model = create_model(schema, predefined_refs={"#/definitions/SomeType": some_type})
+    instance = model(some_value=["a", "b"])
+    assert instance.some_value == ["a", "b"]
+
+
+def test_predefined_refs_top_level_ref_returns_root_model():
+    from json_schema_to_pydantic import create_model
+
+    some_type = TypeAliasType("SomeType", list[str])
+    schema = {"$ref": "#/definitions/SomeType"}
+    root_schema = {
+        "definitions": {"SomeType": {"type": "array", "items": {"type": "string"}}}
+    }
+
+    model = create_model(
+        schema,
+        root_schema=root_schema,
+        predefined_refs={"#/definitions/SomeType": some_type},
+    )
+    instance = model(root=["a", "b"])
+    assert instance.root == ["a", "b"]
+    assert model.__name__ == "SomeType"
+
+
 def test_predefined_models_validation_requires_local_ref_keys():
     with pytest.raises(ValueError, match="Keys must be local JSON Pointer refs"):
         PydanticModelBuilder(predefined_models={"http://example.com/Pet": BaseModel})
@@ -212,6 +247,27 @@ def test_predefined_models_validation_requires_subclass_of_configured_base_model
 def test_predefined_models_validation_requires_mapping():
     with pytest.raises(ValueError, match="predefined_models must be a dict"):
         PydanticModelBuilder(predefined_models=[])  # type: ignore[arg-type]
+
+
+def test_predefined_refs_validation_requires_mapping():
+    with pytest.raises(ValueError, match="predefined_refs must be a dict"):
+        PydanticModelBuilder(predefined_refs=[])  # type: ignore[arg-type]
+
+
+def test_predefined_refs_validation_rejects_invalid_annotation():
+    with pytest.raises(ValueError, match="must be a valid Pydantic-compatible type annotation"):
+        PydanticModelBuilder(predefined_refs={"#/definitions/SomeType": 123})
+
+
+def test_predefined_models_and_refs_conflict_on_same_key():
+    class SomeModel(BaseModel):
+        value: str
+
+    with pytest.raises(ValueError, match="Duplicate predefined refs found"):
+        PydanticModelBuilder(
+            predefined_models={"#/definitions/SomeType": SomeModel},
+            predefined_refs={"#/definitions/SomeType": list[str]},
+        )
 
 
 def test_model_with_combiners():
