@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Dict, List, Optional, Set, Type, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
+from pydantic import BaseModel, ConfigDict, Field, RootModel, TypeAdapter, create_model
 
 from . import SchemaError
 from .builders import ConstraintBuilder
@@ -89,6 +89,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         self,
         base_model_type: Type[T] = BaseModel,
         predefined_models: Optional[Dict[str, Type[BaseModel]]] = None,
+        predefined_refs: Optional[Dict[str, Any]] = None,
     ):
         # Instantiate resolvers and builders directly
         self.type_resolver = TypeResolver()
@@ -108,10 +109,36 @@ class PydanticModelBuilder(IModelBuilder[T]):
             predefined_models,
             base_model_type=self.base_model_type,
         )
+        validated_predefined_refs = self._validate_predefined_refs(predefined_refs)
+        overlapping_refs = set(validated_predefined_models).intersection(validated_predefined_refs)
+        if overlapping_refs:
+            overlap_list = ", ".join(sorted(overlapping_refs))
+            raise ValueError(
+                "Duplicate predefined refs found in both predefined_models and predefined_refs: "
+                f"{overlap_list}. Use only one mapping per ref."
+            )
         # Track models being built to handle recursive references
         self._model_cache: Dict[str, Type[BaseModel]] = dict(validated_predefined_models)
+        self._ref_type_cache: Dict[str, Any] = dict(validated_predefined_refs)
         self._building_models: Set[str] = set()
         self._models_to_rebuild: Set[Type[BaseModel]] = set()
+
+    @staticmethod
+    def _validate_ref_key(ref: Any, mapping_name: str) -> str:
+        """Validate local JSON Pointer reference keys used in predefined mappings."""
+        if not isinstance(ref, str) or not ref.startswith("#/"):
+            raise ValueError(
+                f"Invalid {mapping_name} ref '{ref}'. Keys must be local JSON Pointer refs like "
+                "'#/definitions/Model'"
+            )
+
+        path = ref[2:]
+        if not path or any(segment == "" for segment in path.split("/")):
+            raise ValueError(
+                f"Invalid {mapping_name} ref '{ref}'. Keys must be local JSON Pointer refs "
+                "without empty path segments, for example '#/definitions/Model'"
+            )
+        return ref
 
     def _validate_predefined_models(
         self,
@@ -128,19 +155,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         validated: Dict[str, Type[BaseModel]] = {}
         for ref, model in predefined_models.items():
-            if not isinstance(ref, str) or not ref.startswith("#/"):
-                raise ValueError(
-                    "Invalid predefined model ref "
-                    f"'{ref}'. Keys must be local JSON Pointer refs like "
-                    "'#/definitions/Model'"
-                )
-            path = ref[2:]
-            if not path or any(segment == "" for segment in path.split("/")):
-                raise ValueError(
-                    "Invalid predefined model ref "
-                    f"'{ref}'. Keys must be local JSON Pointer refs without empty path segments, "
-                    "for example '#/definitions/Model'"
-                )
+            ref = self._validate_ref_key(ref, "predefined model")
 
             if not isinstance(model, type) or not issubclass(model, BaseModel):
                 raise ValueError(
@@ -153,6 +168,42 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 )
             validated[ref] = model
         return validated
+
+    def _validate_predefined_refs(
+        self,
+        predefined_refs: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Validate and normalize predefined non-model reference mappings."""
+        if predefined_refs is None:
+            return {}
+        if not isinstance(predefined_refs, dict):
+            raise ValueError(
+                "predefined_refs must be a dict mapping local $ref strings to valid type annotations"
+            )
+
+        validated: Dict[str, Any] = {}
+        for ref, annotation in predefined_refs.items():
+            ref = self._validate_ref_key(ref, "predefined ref")
+            try:
+                TypeAdapter(annotation)
+            except Exception as exc:
+                raise ValueError(
+                    f"Invalid predefined ref type for '{ref}'. Value must be a valid "
+                    "Pydantic-compatible type annotation."
+                ) from exc
+            validated[ref] = annotation
+        return validated
+
+    @staticmethod
+    def _get_ref_title(ref: str) -> str:
+        ref_parts = ref.split("/")
+        return ref_parts[-1] if ref_parts else "DynamicModel"
+
+    def _create_predefined_type_root_model(self, ref: str) -> Type[T]:
+        """Wrap a predefined non-model ref type into a RootModel for top-level $ref schemas."""
+        value_type = self._ref_type_cache[ref]
+        title = self._get_ref_title(ref)
+        return type(title, (RootModel[value_type],), {})
 
     def create_pydantic_model(
         self,
@@ -189,6 +240,8 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Check if we've already built this model
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
+            if original_ref in self._ref_type_cache:
+                return self._create_predefined_type_root_model(original_ref)
 
             # Mark this ref as being built
             if original_ref:
@@ -519,6 +572,9 @@ class PydanticModelBuilder(IModelBuilder[T]):
         original_ref = field_schema.get("$ref")
 
         if "$ref" in field_schema:
+            if original_ref in self._ref_type_cache:
+                return self._ref_type_cache[original_ref]
+
             # Check if this reference is already being built (recursive reference)
             if original_ref in self._building_models:
                 # Return cached model if available

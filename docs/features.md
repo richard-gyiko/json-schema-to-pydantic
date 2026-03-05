@@ -234,6 +234,40 @@ Notes:
 - Values must be subclasses of `pydantic.BaseModel`.
 - Exact ref-key matches take precedence over generated models.
 
+### Reusing Non-Model `$ref` Types
+
+If a `$ref` should resolve to a non-model type alias (for example `list[str]`),
+use `predefined_refs`:
+
+```python
+from typing_extensions import TypeAliasType
+from json_schema_to_pydantic import create_model
+
+SomeType = TypeAliasType("SomeType", list[str])
+
+schema = {
+    "type": "object",
+    "properties": {"some_value": {"$ref": "#/definitions/SomeType"}},
+    "definitions": {
+        "SomeType": {"type": "array", "items": {"type": "string"}}
+    },
+}
+
+Model = create_model(
+    schema,
+    predefined_refs={"#/definitions/SomeType": SomeType},
+)
+instance = Model(some_value=["a", "b"])
+assert instance.some_value == ["a", "b"]
+```
+
+Notes:
+- `predefined_refs` values must be valid Pydantic-compatible type annotations.
+- The same ref key cannot appear in both `predefined_models` and
+  `predefined_refs`.
+- For top-level `$ref` schemas, non-model predefined refs are wrapped into a
+  generated `RootModel`.
+
 ## Limitations
 
 - External references are not supported
