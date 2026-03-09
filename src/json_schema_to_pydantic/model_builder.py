@@ -241,7 +241,9 @@ class PydanticModelBuilder(IModelBuilder[T]):
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
             if original_ref in self._ref_type_cache:
-                return self._create_predefined_type_root_model(original_ref)
+                predefined_model = self._create_predefined_type_root_model(original_ref)
+                self._model_cache[original_ref] = predefined_model
+                return predefined_model
 
             # Mark this ref as being built
             if original_ref:

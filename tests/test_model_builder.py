@@ -212,6 +212,19 @@ def test_predefined_refs_top_level_ref_returns_root_model():
     assert model.__name__ == "SomeType"
 
 
+def test_predefined_refs_top_level_ref_model_is_cached():
+    some_type = TypeAliasType("SomeType", list[str])
+    builder = PydanticModelBuilder(predefined_refs={"#/definitions/SomeType": some_type})
+    schema = {"$ref": "#/definitions/SomeType"}
+    root_schema = {
+        "definitions": {"SomeType": {"type": "array", "items": {"type": "string"}}}
+    }
+
+    first = builder.create_pydantic_model(schema, root_schema=root_schema)
+    second = builder.create_pydantic_model(schema, root_schema=root_schema)
+    assert first is second
+
+
 def test_predefined_models_validation_requires_local_ref_keys():
     with pytest.raises(ValueError, match="Keys must be local JSON Pointer refs"):
         PydanticModelBuilder(predefined_models={"http://example.com/Pet": BaseModel})
