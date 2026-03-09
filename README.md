@@ -106,14 +106,18 @@ For more complex scenarios, you can use the `PydanticModelBuilder` directly:
 
 ```python
 from pydantic import BaseModel
+from typing_extensions import TypeAliasType
 from json_schema_to_pydantic import PydanticModelBuilder
 
 class PetModel(BaseModel):
     name: str
     type: str
 
+SomeType = TypeAliasType("SomeType", list[str])
+
 builder = PydanticModelBuilder(
-    predefined_models={"#/definitions/Pet": PetModel}
+    predefined_models={"#/definitions/Pet": PetModel},
+    predefined_refs={"#/definitions/SomeType": SomeType},
 )
 model = builder.create_pydantic_model(schema, root_schema)
 ```
@@ -121,6 +125,8 @@ model = builder.create_pydantic_model(schema, root_schema)
 You can also pass `predefined_models` to `create_model(...)` directly.
 When a `$ref` key matches an entry in `predefined_models`, that class is reused
 instead of generating a new class.
+For non-model aliases (such as `list[str]` or `TypeAliasType`), use
+`predefined_refs`.
 
 ## Error Handling
 
