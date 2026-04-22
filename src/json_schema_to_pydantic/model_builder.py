@@ -119,6 +119,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
             )
         # Track models being built to handle recursive references
         self._model_cache: Dict[str, Type[BaseModel]] = dict(validated_predefined_models)
+        self._combiner_cache: Dict[str, type[Any]] = dict()
         self._ref_type_cache: Dict[str, Any] = dict(validated_predefined_refs)
         self._building_models: Set[str] = set()
         self._models_to_rebuild: Set[Type[BaseModel]] = set()
@@ -582,6 +583,8 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 # Return cached model if available
                 if original_ref in self._model_cache:
                     return self._model_cache[original_ref]
+                if original_ref in self._combiner_cache:
+                    return self._combiner_cache[original_ref]
                 # Otherwise, return a forward reference (string)
                 # Extract model name from ref
                 ref_parts = original_ref.split("/")
@@ -591,6 +594,8 @@ class PydanticModelBuilder(IModelBuilder[T]):
             # Check if we've already built this model
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
+            if original_ref in self._combiner_cache:
+                return self._combiner_cache[original_ref]
 
             # Mark this ref as being built before resolving
             self._building_models.add(original_ref)
@@ -601,26 +606,32 @@ class PydanticModelBuilder(IModelBuilder[T]):
 
         # Handle combiners
         if "allOf" in field_schema:
-            return self.combiner_handler.handle_all_of(
+            all_of =  self.combiner_handler.handle_all_of(
                 field_schema["allOf"],
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
             )
+            self._combiner_cache[original_ref] = all_of
+            return all_of
         if "anyOf" in field_schema:
-            return self.combiner_handler.handle_any_of(
+            any_of = self.combiner_handler.handle_any_of(
                 field_schema["anyOf"],
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
             )
+            self._combiner_cache[original_ref] = any_of
+            return any_of
         if "oneOf" in field_schema:
-            return self.combiner_handler.handle_one_of(
+            one_of = self.combiner_handler.handle_one_of(
                 field_schema["oneOf"],
                 root_schema,
                 allow_undefined_array_items,
                 allow_undefined_type,
             )
+            self._combiner_cache[original_ref] = one_of
+            return one_of
 
         # Handle arrays by recursively processing items
         if field_schema.get("type") == "array":
