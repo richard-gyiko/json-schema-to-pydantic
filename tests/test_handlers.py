@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Annotated, Union, get_args, get_origin
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
@@ -498,8 +498,13 @@ def test_one_of_with_ref():
     assert cat_instance.root.meow_volume == 10
 
     # Check field descriptions from referenced schema
-    # Access the Union arguments inside Annotated: annotation.__args__[0].__args__
-    union_args = model.model_fields["root"].annotation.__args__[0].__args__
+    # Access the Union arguments inside Annotated
+    annotation = model.model_fields["root"].annotation
+    # unwrap Annotated
+    if get_origin(annotation) is Annotated:
+        annotation = get_args(annotation)[0]
+    union_args = get_args(annotation)
+
     cat_model = next(t for t in union_args if t.__name__ == "Cat")
     assert cat_model.model_fields["type"].description == "Type discriminator"
 
@@ -857,9 +862,11 @@ def test_one_of_populate_by_name():
         populate_by_name=True,
     )
 
-    from typing import get_args
+    annotation = model.model_fields["root"].annotation
+    if get_origin(annotation) is Annotated:
+        annotation = get_args(annotation)[0]
+    types = get_args(annotation)
 
-    types = get_args(model.model_fields["root"].annotation)[0].__args__
     assert len(types) == 2
     assert types[0].model_config["populate_by_name"] is True
     assert types[1].model_config["populate_by_name"] is True
