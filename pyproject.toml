@@ -38,6 +38,10 @@ pythonpath = [
      "src"
 ]
 
+[tool.ruff.lint]
+# Pin ruff's classic default rule set; ruff 0.17 expanded the defaults
+select = ["E4", "E7", "E9", "F"]
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
