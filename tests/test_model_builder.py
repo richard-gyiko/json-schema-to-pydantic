@@ -1,3 +1,5 @@
+from typing import ForwardRef
+
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypeAliasType
@@ -717,3 +719,79 @@ def test_model_with_all_of_combiner_with_underscore_property():
     instance = model(combined_field={"_name": "Alice", "age": 30})
     assert instance.combined_field.name == "Alice"
     assert instance.combined_field.age == 30
+
+
+@pytest.mark.parametrize(
+    "definition, valid_value, invalid_value",
+    [
+        (
+            {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            ["python3"],
+            1,
+        ),
+        (
+            {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+            5,
+            [],
+        ),
+        ({"type": "array", "items": {"type": "string"}}, ["a"], "a"),
+        ({"type": "string", "enum": ["a", "b"]}, "b", "c"),
+        ({"type": "string"}, "a", []),
+    ],
+    ids=["anyOf", "oneOf", "array", "enum", "string"],
+)
+def test_non_model_ref_referenced_multiple_times(definition, valid_value, invalid_value):
+    """Repeated refs to a non-object definition resolve to the same type (issue #44)."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {
+            "first": {"$ref": "#/$defs/Shared"},
+            "second": {"$ref": "#/$defs/Shared"},
+        },
+        "$defs": {"Shared": definition},
+    }
+
+    model = builder.create_pydantic_model(schema)
+
+    first = model.model_fields["first"].annotation
+    second = model.model_fields["second"].annotation
+    assert first == second
+    assert not isinstance(second, (str, ForwardRef))
+    assert model(first=valid_value, second=valid_value).second == valid_value
+    with pytest.raises(ValidationError):
+        model(second=invalid_value)
+
+
+def test_combiner_ref_referenced_multiple_times_in_nested_model():
+    """Reproduction from issue #44: a nested model referencing the same anyOf twice."""
+    builder = PydanticModelBuilder()
+    schema = {
+        "type": "object",
+        "properties": {"python": {"$ref": "#/$defs/PythonConfig"}},
+        "$defs": {
+            "Either": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
+            "PythonConfig": {
+                "type": "object",
+                "properties": {
+                    "python_binary": {"$ref": "#/$defs/Either"},
+                    "custom_tools": {"$ref": "#/$defs/Either"},
+                },
+            },
+        },
+    }
+
+    model = builder.create_pydantic_model(schema)
+
+    python_config = model.model_fields["python"].annotation
+    assert (
+        python_config.model_fields["python_binary"].annotation
+        == python_config.model_fields["custom_tools"].annotation
+    )
+    instance = model(python={"python_binary": "python3", "custom_tools": ["ruff"]})
+    assert instance.python.custom_tools == ["ruff"]

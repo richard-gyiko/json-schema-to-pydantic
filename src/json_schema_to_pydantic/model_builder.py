@@ -121,6 +121,7 @@ class PydanticModelBuilder(IModelBuilder[T]):
         self._model_cache: Dict[str, Type[BaseModel]] = dict(validated_predefined_models)
         self._ref_type_cache: Dict[str, Any] = dict(validated_predefined_refs)
         self._building_models: Set[str] = set()
+        self._resolved_ref_types: Dict[str, Any] = dict()
         self._models_to_rebuild: Set[Type[BaseModel]] = set()
 
     @staticmethod
@@ -588,17 +589,53 @@ class PydanticModelBuilder(IModelBuilder[T]):
                 model_name = ref_parts[-1] if ref_parts else "DynamicModel"
                 return model_name
 
-            # Check if we've already built this model
+            # Check if we've already built this model or resolved this ref
             if original_ref in self._model_cache:
                 return self._model_cache[original_ref]
+            if original_ref in self._resolved_ref_types:
+                return self._resolved_ref_types[original_ref]
 
             # Mark this ref as being built before resolving
             self._building_models.add(original_ref)
 
-            field_schema = self.reference_resolver.resolve_ref(
+            resolved_schema = self.reference_resolver.resolve_ref(
                 field_schema["$ref"], field_schema, root_schema
             )
+            try:
+                field_type = self._resolve_field_schema_type(
+                    resolved_schema,
+                    root_schema,
+                    allow_undefined_array_items,
+                    allow_undefined_type,
+                    populate_by_name,
+                    original_ref,
+                )
+            finally:
+                self._building_models.discard(original_ref)
 
+            # Cache non-model types too (combiners, arrays, enums, primitives),
+            # otherwise later refs to the same definition resolve to a forward ref
+            self._resolved_ref_types[original_ref] = field_type
+            return field_type
+
+        return self._resolve_field_schema_type(
+            field_schema,
+            root_schema,
+            allow_undefined_array_items,
+            allow_undefined_type,
+            populate_by_name,
+        )
+
+    def _resolve_field_schema_type(
+        self,
+        field_schema: Dict[str, Any],
+        root_schema: Dict[str, Any],
+        allow_undefined_array_items: bool,
+        allow_undefined_type: bool,
+        populate_by_name: bool,
+        original_ref: Optional[str] = None,
+    ) -> Any:
+        """Resolves the Python type for an already dereferenced field schema."""
         # Handle combiners
         if "allOf" in field_schema:
             return self.combiner_handler.handle_all_of(
