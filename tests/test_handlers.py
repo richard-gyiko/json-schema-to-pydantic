@@ -508,6 +508,9 @@ def test_one_of_with_ref():
     cat_model = next(t for t in union_args if t.__name__ == "Cat")
     assert cat_model.model_fields["type"].description == "Type discriminator"
 
+    # Discriminator must survive regardless of how pydantic stores Annotated metadata
+    assert model.model_json_schema()["discriminator"]["propertyName"] == "type"
+
 
 def test_any_of_property_with_ref():
     """Test a property using anyOf containing a $ref."""
