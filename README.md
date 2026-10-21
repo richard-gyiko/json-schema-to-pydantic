@@ -11,12 +11,15 @@ A Python library for automatically generating Pydantic v2 models from JSON Schem
 - Converts JSON Schema to Pydantic v2 models
 - Supports complex schema features including:
   - References ($ref) with circular reference detection
-  - Combiners (allOf, anyOf, oneOf) with proper type discrimination
+  - Combiners (allOf, anyOf, oneOf) with discriminated unions where possible
   - Type constraints and validations
   - Array and object validations
-  - Format validations (email, uri, uuid, date-time)
+  - Enums and constants (as `Literal` types)
+  - Format validations (email, uri, uuid, date, time, date-time)
   - Top-level arrays and scalar types (not just objects)
   - Underscore-prefixed fields (common in OpenAPI specs)
+- Reuse of existing Pydantic models and types for `$ref`s
+- Custom base model class for generated models
 - Full type hinting support
 - Clean, simple API
 
@@ -32,15 +35,16 @@ pip install json-schema-to-pydantic
 2. Install development dependencies:
 ```bash
 # Using uv (recommended)
-uv pip install -e ".[dev]"
+uv sync --extra dev
 
 # Or using pip
 pip install -e ".[dev]"
 ```
 
-3. Run tests:
+3. Run tests and linters:
 ```bash
-pytest
+uv run pytest
+uvx ruff check .
 ```
 
 ## Quick Start
@@ -115,18 +119,45 @@ class PetModel(BaseModel):
 
 SomeType = TypeAliasType("SomeType", list[str])
 
+schema = {
+    "type": "object",
+    "properties": {
+        "pet": {"$ref": "#/definitions/Pet"},
+        "tags": {"$ref": "#/definitions/SomeType"},
+    },
+    "definitions": {
+        "Pet": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "type": {"type": "string"}},
+        },
+        "SomeType": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
 builder = PydanticModelBuilder(
     predefined_models={"#/definitions/Pet": PetModel},
     predefined_refs={"#/definitions/SomeType": SomeType},
 )
-model = builder.create_pydantic_model(schema, root_schema)
+model = builder.create_pydantic_model(schema)
 ```
 
-You can also pass `predefined_models` to `create_model(...)` directly.
-When a `$ref` key matches an entry in `predefined_models`, that class is reused
-instead of generating a new class.
+`predefined_models` and `predefined_refs` can also be passed to
+`create_model(...)` directly. When a `$ref` key matches an entry in
+`predefined_models`, that class is reused instead of generating a new class.
 For non-model aliases (such as `list[str]` or `TypeAliasType`), use
 `predefined_refs`.
+
+To give all generated models a common base class (shared config or methods),
+pass `base_model_type`:
+
+```python
+from pydantic import BaseModel, ConfigDict
+
+class FrozenBase(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+UserModel = create_model(schema, base_model_type=FrozenBase)
+```
 
 ## Error Handling
 
@@ -162,4 +193,4 @@ See [docs/features.md](docs/features.md) for detailed documentation of supported
 
 ## License
 
-This project is licensed under the terms of the license included in the repository.
+This project is licensed under the [MIT License](LICENSE).

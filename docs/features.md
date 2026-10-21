@@ -8,8 +8,25 @@ This document outlines the JSON Schema features supported by the library.
 - `integer`: Maps to Python `int`
 - `number`: Maps to Python `float`
 - `boolean`: Maps to Python `bool`
-- `array`: Maps to Python `List`
-- `object`: Maps to Pydantic model
+- `array`: Maps to Python `List` (or `Set` with `uniqueItems: true`)
+- `object`: Maps to a Pydantic model, or to `dict` if no `properties` are defined
+- `null`: Maps to `None`
+
+### Model Generation
+
+- `title` becomes the generated model's class name
+- `description` becomes the model's docstring (or the field's description)
+- Fields not listed in `required` default to `None`
+- `default` values are applied to fields
+
+### Enums and Constants
+
+`enum` and `const` map to `Literal` types:
+
+```json
+{"type": "string", "enum": ["red", "green"]}  // → Literal["red", "green"]
+{"const": 5}                                   // → Literal[5]
+```
 
 ### Multiple Types
 
@@ -50,8 +67,13 @@ Example with complex types:
 
 Supported formats with their Python types:
 - `date-time`: `datetime.datetime`
+- `date`: `datetime.date`
+- `time`: `datetime.time`
+- `email`: `str`, validated against an email pattern
 - `uri`: `pydantic.AnyUrl`
 - `uuid`: `uuid.UUID`
+
+Unknown formats fall back to plain `str`.
 
 Example:
 ```json
@@ -116,8 +138,15 @@ Combines multiple schemas with AND logic:
 }
 ```
 
+### anyOf
+Maps to a `Union` of the sub-schema types. A `null` member makes it `Optional`:
+```json
+{"anyOf": [{"type": "string"}, {"type": "null"}]}  // → Optional[str]
+```
+
 ### oneOf
-Creates discriminated unions using a type field:
+When every option is an object with a `type` property holding a `const`
+value, a discriminated union on `type` is created:
 ```json
 {
     "oneOf": [
@@ -139,9 +168,15 @@ Creates discriminated unions using a type field:
 }
 ```
 
+Any other `oneOf` (simple types, `$ref`s, or objects without a `type`
+discriminator) maps to a plain `Union`, like `anyOf`:
+```json
+{"oneOf": [{"type": "string"}, {"type": "integer"}]}  // → Union[str, int]
+```
+
 ## References
 
-Local references (`$ref`) are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. References can be used in any schema location, including as array items and within nested structures. Circular reference detection is also implemented.
+Local references (`$ref`) to `#/definitions/...` or `#/$defs/...` are supported, including within `allOf`, `anyOf`, and `oneOf` combiners. References can be used in any schema location, including as array items and within nested structures, and a definition can be referenced any number of times. Circular reference detection is also implemented.
 
 Example:
 ```json
@@ -270,10 +305,31 @@ Notes:
 
 ## Limitations
 
-- External references are not supported
-- `additionalProperties` defaults to False
-- `patternProperties` not supported
-- `if`/`then`/`else` not supported
+- External references are not supported (raise `ReferenceError`)
+- `additionalProperties` is not enforced: extra fields are ignored (Pydantic's
+  default), whether it is `true` or `false`. The exception is discriminated
+  `oneOf` variants, which reject extra fields.
+- `patternProperties` is not supported (ignored)
+- `if`/`then`/`else` is not supported
+
+## Custom Base Model
+
+All generated models (including nested ones) subclass `pydantic.BaseModel` by
+default. Pass `base_model_type` to use your own base, e.g. for shared config or
+methods:
+
+```python
+from pydantic import BaseModel, ConfigDict
+from json_schema_to_pydantic import create_model
+
+class FrozenBase(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+Model = create_model(schema, base_model_type=FrozenBase)
+assert issubclass(Model, FrozenBase)
+```
+
+`predefined_models` must be subclasses of `base_model_type`.
 
 ## Top-Level Arrays and Scalars
 
