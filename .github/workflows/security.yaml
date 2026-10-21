@@ -1,0 +1,34 @@
+name: Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+
+  push:
+    branches: [main]
+
+  # New advisories appear without code changes
+  schedule:
+    - cron: "0 6 * * 1"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # `uv audit` needs a recent uv; it is still a preview feature
+          version: "0.11.26"
+
+      - name: Audit locked dependencies
+        run: uv audit --frozen --preview-features audit-command
